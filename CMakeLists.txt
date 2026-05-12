@@ -23,13 +23,4 @@ cpmaddpackage("gh:RobTOsb/fmtlog@2.2.3")
 cpmaddpackage("gh:Microsoft/mimalloc@3.1.4")
 cpmaddpackage("gh:Microsoft/DirectX-Headers@1.619.1")
 
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-    add_custom_target(copy_compile_commands ALL
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_BINARY_DIR}/compile_commands.json
-            ${CMAKE_SOURCE_DIR}/build/compile_commands.json
-        DEPENDS ${CMAKE_BINARY_DIR}/compile_commands.json
-    )
-endif()
-
 add_subdirectory("src")
