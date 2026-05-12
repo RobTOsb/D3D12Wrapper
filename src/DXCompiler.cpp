@@ -88,7 +88,7 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 
 	// Enable 16-bit types
 	compileArgs.push_back(L"-enable-16bit-types");
-	
+
 	// Debug info in debug builds
 #ifdef _DEBUG
 	compileArgs.push_back(DXC_ARG_DEBUG);
