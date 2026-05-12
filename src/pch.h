@@ -1,20 +1,26 @@
 #pragma once
 
 #include "directx/d3d12.h"
+
 #include <d3d11on12.h>
+
 #include "directx/d3dx12.h"
+
 #include "directx/d3d12sdklayers.h"
+
 #include <dxcapi.h>
+
 #include "D3D12MemAlloc.h"
 
 #include "backends/imgui_impl_win32.h"
+
 #include "backends/imgui_impl_dx12.h"
 
 #include "imgui.h"
+
 #include "imgui_spectrum.h"
 
 #include "dxgi1_6.h"
-
 
 #include "HelperClasses/RenderTargetHelper.h"
 
@@ -23,15 +29,15 @@
 #include <Windows.h>
 #include <wrl.h>
 
-#include <cstdint>
-#include <stdexcept>
-#include <memory>
-#include <vector>
+#include <algorithm>
 #include <array>
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
-#include <algorithm>
-#include <span>
+#include <vector>
 
 using CPUDescriptorHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE;
 using GPUDescriptorHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE;
