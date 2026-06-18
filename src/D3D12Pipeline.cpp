@@ -34,9 +34,9 @@ D3D12GraphicsPipeline &D3D12GraphicsPipeline::BuildRootSignatureFromShader(const
 	}
 
 	HRESULT hr = device_->CreateRootSignature(0,
-												  compileResult.rootSignatureBlob->GetBufferPointer(),
-												  compileResult.rootSignatureBlob->GetBufferSize(),
-												  IID_PPV_ARGS(&rootSignature_));
+											  compileResult.rootSignatureBlob->GetBufferPointer(),
+											  compileResult.rootSignatureBlob->GetBufferSize(),
+											  IID_PPV_ARGS(&rootSignature_));
 	if (FAILED(hr))
 	{
 		throw D3D12Exception("Failed to create root signature from shader", hr);
@@ -51,6 +51,16 @@ void D3D12GraphicsPipeline::BuildGraphicsPipeline(const GraphicsPipelineCreateIn
 	if (!rootSignature_)
 	{
 		throw D3D12Exception("Root signature must be built before pipeline", E_FAIL);
+	}
+
+	// Mesh shader present? Route to the mesh pipeline path before any VS logic.
+	auto msIt = compileResult.compiledBlobs.find("meshMain");
+	if (msIt == compileResult.compiledBlobs.end())
+		msIt = compileResult.compiledBlobs.find("MSMain");
+	if (msIt != compileResult.compiledBlobs.end())
+	{
+		BuildMeshShaderPipeline(pipelineInfo, compileResult);
+		return;
 	}
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -109,20 +119,6 @@ void D3D12GraphicsPipeline::BuildGraphicsPipeline(const GraphicsPipelineCreateIn
 		else
 		{
 			psoDesc.InputLayout = { nullptr, 0 };
-		}
-
-		// Check for mesh shader
-		auto msIt = compileResult.compiledBlobs.find("meshMain");
-		if (msIt == compileResult.compiledBlobs.end())
-		{
-			msIt = compileResult.compiledBlobs.find("MSMain");
-		}
-
-		// If mesh shader is present, build mesh shader pipeline instead
-		if (msIt != compileResult.compiledBlobs.end())
-		{
-			BuildMeshShaderPipeline(pipelineInfo, compileResult);
-			return;
 		}
 	}
 
@@ -374,9 +370,9 @@ D3D12ComputePipeline &D3D12ComputePipeline::BuildRootSignatureFromShader(const S
 	}
 
 	HRESULT hr = device_->CreateRootSignature(0,
-												  compileResult.rootSignatureBlob->GetBufferPointer(),
-												  compileResult.rootSignatureBlob->GetBufferSize(),
-												  IID_PPV_ARGS(&rootSignature_));
+											  compileResult.rootSignatureBlob->GetBufferPointer(),
+											  compileResult.rootSignatureBlob->GetBufferSize(),
+											  IID_PPV_ARGS(&rootSignature_));
 	if (FAILED(hr))
 	{
 		throw D3D12Exception("Failed to create root signature from shader", hr);

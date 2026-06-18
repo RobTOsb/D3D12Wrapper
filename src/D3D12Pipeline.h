@@ -26,7 +26,7 @@ enum class PipelineType : uint32_t
 
 struct InputElement
 {
-	const char* semanticName;
+	const char *semanticName;
 	uint32_t semanticIndex;
 	DXGI_FORMAT format;
 	uint32_t inputSlot;
@@ -37,47 +37,58 @@ struct InputElement
 
 struct RasterizerStateDesc
 {
-    D3D12_FILL_MODE fillMode = D3D12_FILL_MODE_SOLID;
-    D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
-    BOOL frontCounterClockwise = TRUE;
-    INT depthBias = 0;
-    float depthBiasClamp = 0.0f;
-    float slopeScaledDepthBias = 0.0f;
-    BOOL depthClipEnable = TRUE;
-    BOOL multisampleEnable = FALSE;
-    BOOL antialiasedLineEnable = FALSE;
+	D3D12_FILL_MODE fillMode = D3D12_FILL_MODE_SOLID;
+	D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
+	BOOL frontCounterClockwise = TRUE;
+	INT depthBias = 0;
+	float depthBiasClamp = 0.0f;
+	float slopeScaledDepthBias = 0.0f;
+	BOOL depthClipEnable = TRUE;
+	BOOL multisampleEnable = FALSE;
+	BOOL antialiasedLineEnable = FALSE;
 
-    static RasterizerStateDesc Default()
-    {
-        return RasterizerStateDesc{};
-    }
+	static RasterizerStateDesc Default()
+	{
+		return RasterizerStateDesc{};
+	}
 };
 
 struct BlendStateDesc
 {
-    BOOL alphaToCoverageEnable = FALSE;
-    BOOL independentBlendEnable = FALSE;
-    D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlend;
-    std::vector<D3D12_RENDER_TARGET_BLEND_DESC> rtBlends;
+	BOOL alphaToCoverageEnable = FALSE;
+	BOOL independentBlendEnable = FALSE;
+	D3D12_RENDER_TARGET_BLEND_DESC renderTargetBlend = {
+		FALSE, // BlendEnable
+		FALSE, // LogicOpEnable
+		D3D12_BLEND_ONE, // SrcBlend
+		D3D12_BLEND_ZERO, // DestBlend
+		D3D12_BLEND_OP_ADD, // BlendOp
+		D3D12_BLEND_ONE, // SrcBlendAlpha
+		D3D12_BLEND_ZERO, // DestBlendAlpha
+		D3D12_BLEND_OP_ADD, // BlendOpAlpha
+		D3D12_LOGIC_OP_NOOP, // LogicOp
+		D3D12_COLOR_WRITE_ENABLE_ALL // RenderTargetWriteMask
+	};
+	std::vector<D3D12_RENDER_TARGET_BLEND_DESC> rtBlends;
 
-    static BlendStateDesc OpaqueDefault()
-    {
-        BlendStateDesc desc;
+	static BlendStateDesc OpaqueDefault()
+	{
+		BlendStateDesc desc;
 
-        D3D12_RENDER_TARGET_BLEND_DESC rtBlend = {};
-        rtBlend.BlendEnable = FALSE;
-        rtBlend.LogicOpEnable = FALSE;
-        rtBlend.SrcBlend = D3D12_BLEND_ONE;
-        rtBlend.DestBlend = D3D12_BLEND_ZERO;
-        rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
-        rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        rtBlend.LogicOp = D3D12_LOGIC_OP_NOOP;
-        rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        desc.renderTargetBlend = rtBlend;
-        return desc;
-    }
+		D3D12_RENDER_TARGET_BLEND_DESC rtBlend = {};
+		rtBlend.BlendEnable = FALSE;
+		rtBlend.LogicOpEnable = FALSE;
+		rtBlend.SrcBlend = D3D12_BLEND_ONE;
+		rtBlend.DestBlend = D3D12_BLEND_ZERO;
+		rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
+		rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+		rtBlend.DestBlendAlpha = D3D12_BLEND_ZERO;
+		rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		rtBlend.LogicOp = D3D12_LOGIC_OP_NOOP;
+		rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+		desc.renderTargetBlend = rtBlend;
+		return desc;
+	}
 
 	// static BlendStateDesc MaskDefault()
 	// {
@@ -123,36 +134,36 @@ struct BlendStateDesc
 	static BlendStateDesc WBOITBlend()
 	{
 		BlendStateDesc desc;
-		desc.alphaToCoverageEnable  = FALSE;
+		desc.alphaToCoverageEnable = FALSE;
 		desc.independentBlendEnable = TRUE;
 
 		// Accum target: additive accumulation of weighted colour+alpha.
 		D3D12_RENDER_TARGET_BLEND_DESC accum = {};
-		accum.BlendEnable             = TRUE;
-		accum.LogicOpEnable           = FALSE;
-		accum.SrcBlend                = D3D12_BLEND_ONE;
-		accum.DestBlend               = D3D12_BLEND_ONE;
-		accum.BlendOp                 = D3D12_BLEND_OP_ADD;
-		accum.SrcBlendAlpha           = D3D12_BLEND_ONE;
-		accum.DestBlendAlpha          = D3D12_BLEND_ONE;
-		accum.BlendOpAlpha            = D3D12_BLEND_OP_ADD;
-		accum.LogicOp                 = D3D12_LOGIC_OP_NOOP;
-		accum.RenderTargetWriteMask   = D3D12_COLOR_WRITE_ENABLE_ALL;
+		accum.BlendEnable = TRUE;
+		accum.LogicOpEnable = FALSE;
+		accum.SrcBlend = D3D12_BLEND_ONE;
+		accum.DestBlend = D3D12_BLEND_ONE;
+		accum.BlendOp = D3D12_BLEND_OP_ADD;
+		accum.SrcBlendAlpha = D3D12_BLEND_ONE;
+		accum.DestBlendAlpha = D3D12_BLEND_ONE;
+		accum.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		accum.LogicOp = D3D12_LOGIC_OP_NOOP;
+		accum.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 		// Reveal target: product-of-(1-alpha) accumulated in the red channel.
 		// Shader writes src.r = (1-alpha), src.a = 0.
 		// dst.r = 0 * src.r + src.r * dst.r = (1-alpha) * dst.r  (SRC_COLOR reads src.r)
 		D3D12_RENDER_TARGET_BLEND_DESC reveal = {};
-		reveal.BlendEnable            = TRUE;
-		reveal.LogicOpEnable          = FALSE;
-		reveal.SrcBlend               = D3D12_BLEND_ZERO;
-		reveal.DestBlend              = D3D12_BLEND_SRC_COLOR;
-		reveal.BlendOp                = D3D12_BLEND_OP_ADD;
-		reveal.SrcBlendAlpha          = D3D12_BLEND_ZERO;
-		reveal.DestBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
-		reveal.BlendOpAlpha           = D3D12_BLEND_OP_ADD;
-		reveal.LogicOp                = D3D12_LOGIC_OP_NOOP;
-		reveal.RenderTargetWriteMask  = D3D12_COLOR_WRITE_ENABLE_RED;
+		reveal.BlendEnable = TRUE;
+		reveal.LogicOpEnable = FALSE;
+		reveal.SrcBlend = D3D12_BLEND_ZERO;
+		reveal.DestBlend = D3D12_BLEND_SRC_COLOR;
+		reveal.BlendOp = D3D12_BLEND_OP_ADD;
+		reveal.SrcBlendAlpha = D3D12_BLEND_ZERO;
+		reveal.DestBlendAlpha = D3D12_BLEND_SRC_ALPHA;
+		reveal.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		reveal.LogicOp = D3D12_LOGIC_OP_NOOP;
+		reveal.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
 
 		desc.rtBlends = { accum, reveal };
 		return desc;
@@ -161,40 +172,47 @@ struct BlendStateDesc
 
 struct StencilOpDesc
 {
-    D3D12_STENCIL_OP stencilFailOp = D3D12_STENCIL_OP_KEEP;
-    D3D12_STENCIL_OP stencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-    D3D12_STENCIL_OP stencilPassOp = D3D12_STENCIL_OP_KEEP;
-    D3D12_COMPARISON_FUNC stencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	D3D12_STENCIL_OP stencilFailOp = D3D12_STENCIL_OP_KEEP;
+	D3D12_STENCIL_OP stencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	D3D12_STENCIL_OP stencilPassOp = D3D12_STENCIL_OP_KEEP;
+	D3D12_COMPARISON_FUNC stencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 };
 
 struct DepthStencilStateDesc
 {
-    BOOL depthEnable = TRUE;
-    D3D12_DEPTH_WRITE_MASK depthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    D3D12_COMPARISON_FUNC depthFunc = D3D12_COMPARISON_FUNC_LESS;
-    BOOL stencilEnable = FALSE;
-    uint8_t stencilReadMask = 0xFF;
-    uint8_t stencilWriteMask = 0xFF;
-    StencilOpDesc frontFace;
-    StencilOpDesc backFace;
-    
-    static DepthStencilStateDesc Default()
-    {
-        return DepthStencilStateDesc{};
-    }
+	BOOL depthEnable = TRUE;
+	D3D12_DEPTH_WRITE_MASK depthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	D3D12_COMPARISON_FUNC depthFunc = D3D12_COMPARISON_FUNC_LESS;
+	BOOL stencilEnable = FALSE;
+	uint8_t stencilReadMask = 0xFF;
+	uint8_t stencilWriteMask = 0xFF;
+	StencilOpDesc frontFace;
+	StencilOpDesc backFace;
+
+	static DepthStencilStateDesc Default()
+	{
+		return DepthStencilStateDesc{};
+	}
+
+	static DepthStencilStateDesc ReversedZ()
+	{
+		DepthStencilStateDesc desc;
+		desc.depthFunc = D3D12_COMPARISON_FUNC_GREATER;
+		return desc;
+	}
 };
 
 struct GraphicsPipelineCreateInfo
 {
 	PipelineType pipelineType = PipelineType::GRAPHICS_VERTEX;
-	
+
 	// Rasterizer state
-    RasterizerStateDesc rasterizerState;
-	
+	RasterizerStateDesc rasterizerState;
+
 	// Depth stencil state
-    DepthStencilStateDesc depthStencilState;
+	DepthStencilStateDesc depthStencilState;
 	// Blend state
-    BlendStateDesc blendState;
+	BlendStateDesc blendState;
 	// Input layout (only for vertex shader pipeline)
 	std::vector<InputElement> inputElements;
 	// Render target formats
@@ -202,7 +220,7 @@ struct GraphicsPipelineCreateInfo
 	DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN;
 	// Topology
 	PrimitiveTopology primitiveTopology = PrimitiveTopology::TRIANGLE_LIST;
-	
+
 	// Sample desc
 	uint32_t sampleCount = 1;
 	uint32_t sampleQuality = 0;
@@ -217,14 +235,20 @@ public:
 	D3D12GraphicsPipeline &BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult);
 	void BuildGraphicsPipeline(const GraphicsPipelineCreateInfo &pipelineInfo,
 							   const ShaderCompilationResult &compileResult);
-	
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetNativeRootSignature() const { return rootSignature_; }
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> GetNativePipelineState() const { return pipelineState_; }
+
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetNativeRootSignature() const
+	{
+		return rootSignature_;
+	}
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> GetNativePipelineState() const
+	{
+		return pipelineState_;
+	}
 
 private:
-    void BuildMeshShaderPipeline(const GraphicsPipelineCreateInfo& pipelineInfo,
-                                 const ShaderCompilationResult& compileResult);
-	
+	void BuildMeshShaderPipeline(const GraphicsPipelineCreateInfo &pipelineInfo,
+								 const ShaderCompilationResult &compileResult);
+
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
@@ -238,9 +262,15 @@ public:
 
 	D3D12ComputePipeline &BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult);
 	void BuildComputePipeline(const ShaderCompilationResult &compileResult);
-	
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetNativeRootSignature() const { return rootSignature_; }
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> GetNativePipelineState() const { return pipelineState_; }
+
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetNativeRootSignature() const
+	{
+		return rootSignature_;
+	}
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> GetNativePipelineState() const
+	{
+		return pipelineState_;
+	}
 
 private:
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;

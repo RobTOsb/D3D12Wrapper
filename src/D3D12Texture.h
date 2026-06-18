@@ -26,4 +26,6 @@ public:
 			throw std::runtime_error("Failed to write to D3D12 texture subresource.");
 		}
 	}
+
+	
 };
