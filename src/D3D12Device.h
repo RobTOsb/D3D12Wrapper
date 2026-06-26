@@ -89,16 +89,9 @@ public:
 		return allocator_;
 	}
 
-	ID3D11Device *GetD3D11Device() const
-	{
-		return d3d11Device_.Get();
-	}
-
 private:
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory_;
 	Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter_;
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator_;
-	Microsoft::WRL::ComPtr<ID3D11Device> d3d11Device_;
-	Microsoft::WRL::ComPtr<ID3D11DeviceContext> d3d11DeviceContext_;
 };

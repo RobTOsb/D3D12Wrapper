@@ -191,23 +191,6 @@ D3D12Device::D3D12Device()
 		throw D3D12Exception("Failed to create D3D12 Memory Allocator.", hr);
 	}
 
-	const D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
-	hr = D3D11On12CreateDevice(device_.Get(),
-							   0,
-							   featureLevels,
-							   1,
-							   nullptr,
-							   0,
-							   0,
-							   &d3d11Device_,
-							   &d3d11DeviceContext_,
-							   nullptr);
-	if (FAILED(hr))
-	{
-		logw("WARNING: Failed to create D3D11on12 device (0x{:08X}). GPU texture compression will be unavailable.",
-			 static_cast<unsigned>(hr));
-	}
-
 	fmtlog::poll();
 }
 

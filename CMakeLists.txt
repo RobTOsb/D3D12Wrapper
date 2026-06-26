@@ -16,6 +16,7 @@ cpmaddpackage(
     OPTIONS
         "BUILD_TOOLS OFF"
         "BUILD_SAMPLE OFF"
+        "BUILD_DX11 OFF"
         "DIRECTXTEX_INSTALL OFF"
 )
 
