@@ -108,6 +108,12 @@ void D3D12CommandList::SetName(const char *name)
 {
 	const std::wstring wName(name, name + strlen(name));
 	commandList_->SetName(wName.c_str());
+
+	if (ownedAllocator_)
+	{
+		const std::string allocName = std::string(name) + " (Allocator)";
+		ownedAllocator_->SetName(allocName.c_str());
+	}
 }
 
 void D3D12CommandList::CopyResource(D3D12Resource *dstResource, D3D12Resource *srcResource)
@@ -233,6 +239,11 @@ void D3D12CommandList::SetComputePipeline(D3D12ComputePipeline *pipeline)
 
 void D3D12CommandList::Reset()
 {
+	// When the command list owns its allocator the allocator must be reset before the list. 
+	// Externally-managed allocators are reset by the caller (e.g. CommandListPool::BeginFrame) before calling Reset().
+	if (ownedAllocator_)
+		commandAllocator_->Reset();
+
 	HRESULT hr = commandList_->Reset(commandAllocator_->GetNativeCommandAllocator().Get(), nullptr);
 	if (FAILED(hr))
 	{

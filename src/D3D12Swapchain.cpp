@@ -13,6 +13,10 @@ D3D12Swapchain::D3D12Swapchain(Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory
 							   uint32_t bufferCount,
 							   bool useHDR)
 {
+	width_ = width;
+	height_ = height;
+	bufferCount_ = bufferCount;
+
 	// Create swapchain description
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = width;

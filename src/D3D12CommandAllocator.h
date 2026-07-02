@@ -59,6 +59,12 @@ public:
         return commandAllocator_;
     }
 
+    void SetName(const char *name)
+    {
+        const std::wstring wName(name, name + strlen(name));
+        commandAllocator_->SetName(wName.c_str());
+    }
+
     void Reset()
     {
         HRESULT hr = commandAllocator_->Reset();

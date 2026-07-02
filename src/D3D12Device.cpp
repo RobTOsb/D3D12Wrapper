@@ -4,7 +4,7 @@
 #include "D3D12Resource.h"
 #include "D3D12Texture.h"
 
-#include "mimalloc.h"
+#include "mimalloc-new-delete.h"
 
 #include <fmtlog.h>
 #include <stdexcept>
