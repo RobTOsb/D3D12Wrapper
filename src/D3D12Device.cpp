@@ -163,9 +163,8 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 		GetAdapter(dxgiFactory_, adapter_);
 	}
 
-
 	// Create D3D12 Device
-	hr = D3D12CreateDevice(adapter_.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(&device_));
+	hr = D3D12CreateDevice(adapter_.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device_));
 
 	if (FAILED(hr))
 	{
