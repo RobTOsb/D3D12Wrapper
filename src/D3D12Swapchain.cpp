@@ -33,6 +33,7 @@ D3D12Swapchain::D3D12Swapchain(Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory
 	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
 	backBufferFormat_ = swapchainDesc.Format;
+	swapchainFlags_ = swapchainDesc.Flags;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain1> swapchain1;
 	HRESULT hr = dxgiFactory->CreateSwapChainForHwnd(commandQueue.Get(),
@@ -88,5 +89,38 @@ void D3D12Swapchain::Present(uint32_t syncInterval, uint32_t flags)
 	if (FAILED(hr))
 	{
 		throw D3D12Exception("Failed to present swapchain.", hr);
+	}
+}
+
+void D3D12Swapchain::Resize(uint32_t width, uint32_t height)
+{
+	if (width == 0 || height == 0 || (width == width_ && height == height_))
+	{
+		return;
+	}
+
+	for (auto &backBuffer: backBuffers_)
+	{
+		backBuffer->SetResource(nullptr);
+	}
+
+	HRESULT hr = swapchain_->ResizeBuffers(bufferCount_, width, height, backBufferFormat_, swapchainFlags_);
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to resize DXGI swapchain.", hr);
+	}
+
+	width_ = width;
+	height_ = height;
+
+	for (uint32_t i = 0; i < bufferCount_; ++i)
+	{
+		Microsoft::WRL::ComPtr<ID3D12Resource> bufferResource;
+		hr = swapchain_->GetBuffer(i, IID_PPV_ARGS(&bufferResource));
+		if (FAILED(hr))
+		{
+			throw D3D12Exception("Failed to get swapchain back buffer after resize.", hr);
+		}
+		backBuffers_[i]->SetResource(bufferResource.Get());
 	}
 }

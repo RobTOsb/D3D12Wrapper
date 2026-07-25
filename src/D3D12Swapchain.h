@@ -54,6 +54,7 @@ public:
 	}
 
 	void Present(uint32_t syncInterval = 0, uint32_t flags = 0);
+	void Resize(uint32_t width, uint32_t height);
 
 private:
 	Microsoft::WRL::ComPtr<IDXGISwapChain3> swapchain_;
@@ -62,4 +63,5 @@ private:
 	UINT width_;
 	UINT height_;
 	uint32_t bufferCount_;
+	UINT swapchainFlags_;
 };
