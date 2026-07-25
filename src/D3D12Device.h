@@ -16,7 +16,7 @@ class D3D12Texture;
 class D3D12Device
 {
 public:
-	D3D12Device();
+	explicit D3D12Device(bool useSoftwareAdapter = false);
 	~D3D12Device() = default;
 
 	std::unique_ptr<D3D12CommandQueue> CreateCommandQueue(D3D12QueueType type);

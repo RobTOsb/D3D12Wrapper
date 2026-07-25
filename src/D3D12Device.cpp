@@ -43,6 +43,27 @@ static void PrintAdapterInfo(DXGI_ADAPTER_DESC1 &desc)
 	logi("  Shared System Memory: {} MB", desc.SharedSystemMemory / (1024 * 1024));
 }
 
+static void GetWarpAdapter(Microsoft::WRL::ComPtr<IDXGIFactory6> &factory,
+							Microsoft::WRL::ComPtr<IDXGIAdapter1> &adapter)
+{
+	Microsoft::WRL::ComPtr<IDXGIFactory4> factory4;
+	HRESULT hr = factory.As(&factory4);
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to query IDXGIFactory4 interface for WARP adapter.", hr);
+	}
+
+	hr = factory4->EnumWarpAdapter(IID_PPV_ARGS(&adapter));
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to enumerate WARP (software) adapter.", hr);
+	}
+
+	DXGI_ADAPTER_DESC1 desc;
+	adapter->GetDesc1(&desc);
+	PrintAdapterInfo(desc);
+}
+
 static void GetAdapter(Microsoft::WRL::ComPtr<IDXGIFactory6> &factory, Microsoft::WRL::ComPtr<IDXGIAdapter1> &adapter)
 {
 	HRESULT hr;
@@ -82,7 +103,7 @@ static void GetAdapter(Microsoft::WRL::ComPtr<IDXGIFactory6> &factory, Microsoft
 	}
 }
 
-D3D12Device::D3D12Device()
+D3D12Device::D3D12Device(bool useSoftwareAdapter)
 {
 	HRESULT hr;
 
@@ -132,7 +153,15 @@ D3D12Device::D3D12Device()
 		throw D3D12Exception("Failed to create DXGI Factory.", hr);
 	}
 
-	GetAdapter(dxgiFactory_, adapter_);
+	if (useSoftwareAdapter)
+	{
+		logi("Forcing WARP software adapter.");
+		GetWarpAdapter(dxgiFactory_, adapter_);
+	}
+	else
+	{
+		GetAdapter(dxgiFactory_, adapter_);
+	}
 
 
 	// Create D3D12 Device
