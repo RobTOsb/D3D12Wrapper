@@ -9,6 +9,7 @@
 class D3D12DescriptorHeap;
 class D3D12GraphicsPipeline;
 class D3D12ComputePipeline;
+class D3D12RaytracingPipeline;
 class D3D12Resource;
 
 class D3D12CommandList
@@ -109,6 +110,7 @@ public:
 								  
 	void SetGraphicsPipeline(D3D12GraphicsPipeline *pipeline);
 	void SetComputePipeline(D3D12ComputePipeline *pipeline);
+	void SetRaytracingPipeline(D3D12RaytracingPipeline *pipeline);
 	void SetGraphicsDescriptorTable(uint32_t rootParameterIndex, GPUDescriptorHandle gpuHandle);
 	void SetGraphics32BitConstants(uint32_t rootParameterIndex,
 								   uint32_t numConstants,
@@ -136,6 +138,7 @@ public:
 						 ID3D12Resource *countBuffer = nullptr,
 						 UINT countBufferOffset = 0);
 	void BuildRaytracingAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc);
+	void DispatchRays(const D3D12_DISPATCH_RAYS_DESC &desc);
 	void EmitUAVBarrier(D3D12Resource *resource = nullptr);
 
 	void WriteBreadcrumb(uint64_t destGpuVA,

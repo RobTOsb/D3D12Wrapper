@@ -420,3 +420,138 @@ void D3D12ComputePipeline::BuildComputePipeline(const ShaderCompilationResult &c
 		throw D3D12Exception("Failed to create compute pipeline state", hr);
 	}
 }
+
+D3D12RaytracingPipeline &D3D12RaytracingPipeline::BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult)
+{
+	if (!compileResult.rootSignatureBlob || compileResult.rootSignatureBlob->GetBufferSize() == 0)
+	{
+		throw D3D12Exception("No root signature found in shader. Make sure to define 'rootSig' in the shader.", E_FAIL);
+	}
+
+	HRESULT hr = device_->CreateRootSignature(0,
+											  compileResult.rootSignatureBlob->GetBufferPointer(),
+											  compileResult.rootSignatureBlob->GetBufferSize(),
+											  IID_PPV_ARGS(&rootSignature_));
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to create root signature from shader", hr);
+	}
+
+	return *this;
+}
+
+D3D12RaytracingPipeline &D3D12RaytracingPipeline::SetGlobalRootSignature(Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature)
+{
+	if (!rootSignature)
+	{
+		throw D3D12Exception("Root signature must not be null", E_INVALIDARG);
+	}
+
+	rootSignature_ = rootSignature;
+	return *this;
+}
+
+void D3D12RaytracingPipeline::BuildRaytracingPipeline(const RaytracingPipelineCreateInfo &pipelineInfo,
+													  const ShaderCompilationResult &compileResult)
+{
+	if (!rootSignature_)
+	{
+		throw D3D12Exception("Root signature must be built before raytracing pipeline", E_FAIL);
+	}
+
+	// Verify device supports DXR
+	D3D12_FEATURE_DATA_D3D12_OPTIONS5 features = {};
+	HRESULT hr = device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features, sizeof(features));
+	if (FAILED(hr) || features.RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
+	{
+		throw D3D12Exception("Raytracing is not supported on this device", E_NOTIMPL);
+	}
+
+	// The whole DXIL library is expected to be compiled as a single lib_6_x blob (entry point
+	// left empty so DXCompiler stores it under "main").
+	auto libIt = compileResult.compiledBlobs.find("main");
+	if (libIt == compileResult.compiledBlobs.end())
+	{
+		libIt = compileResult.compiledBlobs.begin();
+	}
+	if (libIt == compileResult.compiledBlobs.end())
+	{
+		throw D3D12Exception("DXIL library is required for raytracing pipeline", E_INVALIDARG);
+	}
+
+	CD3DX12_STATE_OBJECT_DESC raytracingPipelineDesc(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
+
+	// DXIL library + exports
+	auto lib = raytracingPipelineDesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
+	CD3DX12_SHADER_BYTECODE libraryBytecode(libIt->second->GetBufferPointer(), libIt->second->GetBufferSize());
+	lib->SetDXILLibrary(&libraryBytecode);
+	for (const auto &exportName: pipelineInfo.exports)
+	{
+		lib->DefineExport(exportName.c_str());
+	}
+
+	// Hit groups
+	for (const auto &hitGroupDesc: pipelineInfo.hitGroups)
+	{
+		auto hitGroup = raytracingPipelineDesc.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
+		hitGroup->SetHitGroupType(hitGroupDesc.type);
+		hitGroup->SetHitGroupExport(hitGroupDesc.hitGroupExport.c_str());
+		if (!hitGroupDesc.closestHitExport.empty())
+		{
+			hitGroup->SetClosestHitShaderImport(hitGroupDesc.closestHitExport.c_str());
+		}
+		if (!hitGroupDesc.anyHitExport.empty())
+		{
+			hitGroup->SetAnyHitShaderImport(hitGroupDesc.anyHitExport.c_str());
+		}
+		if (!hitGroupDesc.intersectionExport.empty())
+		{
+			hitGroup->SetIntersectionShaderImport(hitGroupDesc.intersectionExport.c_str());
+		}
+	}
+
+	// Shader config (payload / attribute sizes)
+	auto shaderConfig = raytracingPipelineDesc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
+	shaderConfig->Config(pipelineInfo.maxPayloadSizeInBytes, pipelineInfo.maxAttributeSizeInBytes);
+
+	// Local root signatures + their export associations
+	for (const auto &localRootSigAssoc: pipelineInfo.localRootSignatures)
+	{
+		auto localRootSig = raytracingPipelineDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
+		localRootSig->SetRootSignature(localRootSigAssoc.localRootSignature.Get());
+
+		auto association = raytracingPipelineDesc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
+		association->SetSubobjectToAssociate(*localRootSig);
+		for (const auto &exportName: localRootSigAssoc.exports)
+		{
+			association->AddExport(exportName.c_str());
+		}
+	}
+
+	// Global root signature
+	auto globalRootSig = raytracingPipelineDesc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
+	globalRootSig->SetRootSignature(rootSignature_.Get());
+
+	// Pipeline config (max recursion depth)
+	auto pipelineConfig = raytracingPipelineDesc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
+	pipelineConfig->Config(pipelineInfo.maxTraceRecursionDepth);
+
+	Microsoft::WRL::ComPtr<ID3D12Device5> device5;
+	hr = device_->QueryInterface(IID_PPV_ARGS(&device5));
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Device does not support ID3D12Device5", hr);
+	}
+
+	hr = device5->CreateStateObject(raytracingPipelineDesc, IID_PPV_ARGS(&stateObject_));
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to create raytracing pipeline state object", hr);
+	}
+
+	hr = stateObject_->QueryInterface(IID_PPV_ARGS(&stateObjectProperties_));
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to query ID3D12StateObjectProperties from raytracing state object", hr);
+	}
+}

@@ -237,6 +237,18 @@ void D3D12CommandList::SetComputePipeline(D3D12ComputePipeline *pipeline)
 	commandList_->SetComputeRootSignature(pipeline->GetNativeRootSignature().Get());
 }
 
+void D3D12CommandList::SetRaytracingPipeline(D3D12RaytracingPipeline *pipeline)
+{
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> commandList4;
+	HRESULT hr = commandList_.As(&commandList4);
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to query ID3D12GraphicsCommandList4 interface.", hr);
+	}
+	commandList4->SetPipelineState1(pipeline->GetNativeStateObject().Get());
+	commandList_->SetComputeRootSignature(pipeline->GetNativeRootSignature().Get());
+}
+
 void D3D12CommandList::Reset()
 {
 	// When the command list owns its allocator the allocator must be reset before the list. 
@@ -523,6 +535,17 @@ void D3D12CommandList::BuildRaytracingAccelerationStructure(
 		throw D3D12Exception("Failed to query ID3D12GraphicsCommandList4 interface.", hr);
 	}
 	commandList4->BuildRaytracingAccelerationStructure(&desc, 0, nullptr);
+}
+
+void D3D12CommandList::DispatchRays(const D3D12_DISPATCH_RAYS_DESC &desc)
+{
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> commandList4;
+	HRESULT hr = commandList_.As(&commandList4);
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to query ID3D12GraphicsCommandList4 interface.", hr);
+	}
+	commandList4->DispatchRays(&desc);
 }
 
 void D3D12CommandList::EmitUAVBarrier(D3D12Resource * /*resource*/)

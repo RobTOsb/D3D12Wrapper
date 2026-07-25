@@ -288,6 +288,11 @@ std::unique_ptr<D3D12ComputePipeline> D3D12Device::CreateComputePipeline()
 	return std::make_unique<D3D12ComputePipeline>(device_);
 }
 
+std::unique_ptr<D3D12RaytracingPipeline> D3D12Device::CreateRaytracingPipeline()
+{
+	return std::make_unique<D3D12RaytracingPipeline>(device_);
+}
+
 std::unique_ptr<D3D12DescriptorHeap> D3D12Device::CreateDescriptorHeap(uint32_t numDescriptors,
 																	   D3D12_DESCRIPTOR_HEAP_FLAGS flags)
 {

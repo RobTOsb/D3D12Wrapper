@@ -1,8 +1,8 @@
 #pragma once
 #include "pch.h"
 
-
 struct ShaderCompilationResult;
+
 enum class PrimitiveTopology : uint32_t
 {
 	POINT_LIST,
@@ -21,7 +21,8 @@ enum class PipelineType : uint32_t
 {
 	GRAPHICS_VERTEX, // Traditional vertex + pixel shader pipeline
 	GRAPHICS_MESH, // Modern mesh + amplification shader pipeline
-	COMPUTE
+	COMPUTE,
+	RAYTRACING
 };
 
 struct InputElement
@@ -89,25 +90,6 @@ struct BlendStateDesc
 		desc.renderTargetBlend = rtBlend;
 		return desc;
 	}
-
-	// static BlendStateDesc MaskDefault()
-	// {
-	// 	BlendStateDesc desc;
-
-	// 	D3D12_RENDER_TARGET_BLEND_DESC rtBlend = {};
-	// 	rtBlend.BlendEnable = FALSE;
-	// 	rtBlend.LogicOpEnable = FALSE;
-	// 	rtBlend.SrcBlend = D3D12_BLEND_ZERO;
-	// 	rtBlend.DestBlend = D3D12_BLEND_ONE;
-	// 	rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
-	// 	rtBlend.SrcBlendAlpha = D3D12_BLEND_ZERO;
-	// 	rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
-	// 	rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	// 	rtBlend.LogicOp = D3D12_LOGIC_OP_NOOP;
-	// 	rtBlend.RenderTargetWriteMask = 0; // No color writes
-	// 	desc.renderTargetBlend = rtBlend;
-	// 	return desc;
-	// }
 
 	static BlendStateDesc AlphaBlend()
 	{
@@ -275,5 +257,69 @@ public:
 private:
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
+};
+
+// A hit group binds a named export ("HitGroupExport") to the closest hit / any hit /
+// intersection shader exports that make it up. Triangle geometry typically only needs
+// closestHitExport (+ optionally anyHitExport); intersectionExport is for procedural geometry.
+struct RaytracingHitGroupDesc
+{
+	std::wstring hitGroupExport;
+	std::wstring closestHitExport;
+	std::wstring anyHitExport;
+	std::wstring intersectionExport;
+	D3D12_HIT_GROUP_TYPE type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+};
+
+struct RaytracingLocalRootSignatureAssociation
+{
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> localRootSignature;
+	std::vector<std::wstring> exports;
+};
+
+struct RaytracingPipelineCreateInfo
+{
+	std::vector<std::wstring> exports;
+
+	std::vector<RaytracingHitGroupDesc> hitGroups;
+
+	uint32_t maxPayloadSizeInBytes = 0;
+	uint32_t maxAttributeSizeInBytes = 8; // Default: built-in triangle attributes (barycentrics)
+	uint32_t maxTraceRecursionDepth = 1;
+
+	std::vector<RaytracingLocalRootSignatureAssociation> localRootSignatures;
+};
+
+class D3D12RaytracingPipeline
+{
+public:
+	D3D12RaytracingPipeline(Microsoft::WRL::ComPtr<ID3D12Device> device) : device_(device) {};
+	~D3D12RaytracingPipeline() = default;
+
+	D3D12RaytracingPipeline &BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult);
+
+	D3D12RaytracingPipeline &SetGlobalRootSignature(Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature);
+
+	void BuildRaytracingPipeline(const RaytracingPipelineCreateInfo &pipelineInfo,
+								 const ShaderCompilationResult &compileResult);
+
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetNativeRootSignature() const
+	{
+		return rootSignature_;
+	}
+	Microsoft::WRL::ComPtr<ID3D12StateObject> GetNativeStateObject() const
+	{
+		return stateObject_;
+	}
+	Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> GetStateObjectProperties() const
+	{
+		return stateObjectProperties_;
+	}
+
+private:
+	Microsoft::WRL::ComPtr<ID3D12Device> device_;
+	Microsoft::WRL::ComPtr<ID3D12StateObject> stateObject_;
+	Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> stateObjectProperties_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 };

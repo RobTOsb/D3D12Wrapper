@@ -70,6 +70,7 @@ public:
 
 	std::unique_ptr<D3D12GraphicsPipeline> CreateGraphicsPipeline();
 	std::unique_ptr<D3D12ComputePipeline> CreateComputePipeline();
+	std::unique_ptr<D3D12RaytracingPipeline> CreateRaytracingPipeline();
 
 	std::unique_ptr<D3D12DescriptorHeap> CreateDescriptorHeap(uint32_t numDescriptors,
 															  D3D12_DESCRIPTOR_HEAP_FLAGS flags);
