@@ -103,10 +103,17 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 	// Enable debug info
 	compileArgs.push_back(L"-Zi");
 	compileArgs.push_back(L"-Qembed_debug");
-	// Additional user-specified arguments
 	for (const auto &arg: arguments)
 	{
-		compileArgs.push_back(arg.c_str());
+		if (!arg.empty() && (arg.front() == L'-' || arg.front() == L'/'))
+		{
+			compileArgs.push_back(arg.c_str());
+		}
+		else
+		{
+			compileArgs.push_back(L"-D");
+			compileArgs.push_back(arg.c_str());
+		}
 	}
 
 	// Prepare source buffer
