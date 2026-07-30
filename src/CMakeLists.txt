@@ -8,6 +8,7 @@ D3D12Swapchain.cpp
 D3D12CommandList.cpp
 D3D12Fence.cpp
 D3D12Pipeline.cpp
+D3D12RootSignatureBuilder.cpp
 D3D12DescriptorHeap.cpp
 DXCompiler.cpp
 D3D12ImguiRenderer.cpp

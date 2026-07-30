@@ -4,6 +4,102 @@
 
 #include "fmtlog.h"
 
+const char *ShaderStageToString(ShaderStage stage)
+{
+	switch (stage)
+	{
+		case ShaderStage::VERTEX:
+			return "vertex";
+		case ShaderStage::PIXEL:
+			return "pixel";
+		case ShaderStage::GEOMETRY:
+			return "geometry";
+		case ShaderStage::HULL:
+			return "hull";
+		case ShaderStage::DOMAIN:
+			return "domain";
+		case ShaderStage::COMPUTE:
+			return "compute";
+		case ShaderStage::MESH:
+			return "mesh";
+		case ShaderStage::AMPLIFICATION:
+			return "amplification";
+		case ShaderStage::LIBRARY:
+			return "library";
+		default:
+			return "unknown";
+	}
+}
+
+const CompiledShader *ShaderCompilationResult::Find(ShaderStage stage) const
+{
+	for (const auto &shader: shaders)
+	{
+		if (shader.stage == stage)
+		{
+			return &shader;
+		}
+	}
+	return nullptr;
+}
+
+void ShaderCompilationResult::Merge(const ShaderCompilationResult &other)
+{
+	shaders.insert(shaders.end(), other.shaders.begin(), other.shaders.end());
+	if (!rootSignatureBlob && other.rootSignatureBlob)
+	{
+		rootSignatureBlob = other.rootSignatureBlob;
+	}
+	success = success && other.success;
+}
+
+static ShaderStage StageFromTargetProfile(const std::wstring &targetProfile)
+{
+	const std::wstring prefix = targetProfile.substr(0, targetProfile.find(L'_'));
+
+	if (prefix == L"vs")
+		return ShaderStage::VERTEX;
+	if (prefix == L"ps")
+		return ShaderStage::PIXEL;
+	if (prefix == L"gs")
+		return ShaderStage::GEOMETRY;
+	if (prefix == L"hs")
+		return ShaderStage::HULL;
+	if (prefix == L"ds")
+		return ShaderStage::DOMAIN;
+	if (prefix == L"cs")
+		return ShaderStage::COMPUTE;
+	if (prefix == L"ms")
+		return ShaderStage::MESH;
+	if (prefix == L"as")
+		return ShaderStage::AMPLIFICATION;
+	if (prefix == L"lib")
+		return ShaderStage::LIBRARY;
+
+	return ShaderStage::UNKNOWN;
+}
+
+DXShaderCompiler::DXShaderCompiler()
+{
+	HRESULT hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler_));
+	if (FAILED(hr))
+	{
+		throw std::runtime_error("Failed to create DXC compiler instance.");
+	}
+
+	hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils_));
+	if (FAILED(hr))
+	{
+		throw std::runtime_error("Failed to create DXC utils instance.");
+	}
+
+	hr = utils_->CreateDefaultIncludeHandler(&includeHandler_);
+	if (FAILED(hr))
+	{
+		throw std::runtime_error("Failed to create DXC include handler.");
+	}
+}
+
 ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstring &shaderPath,
 																const std::wstring &entryPoint,
 																const std::wstring &targetProfile,
@@ -31,27 +127,9 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 	}
 	shaderFile.close();
 
-	// Create DXC utils for file operations
-	Microsoft::WRL::ComPtr<IDxcUtils> utils;
-	HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils));
-	if (FAILED(hr))
-	{
-		logw("Failed to create DXC utils instance");
-		return result;
-	}
-
-	// Create include handler
-	Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler;
-	hr = utils->CreateDefaultIncludeHandler(&includeHandler);
-	if (FAILED(hr))
-	{
-		logw("Failed to create include handler");
-		return result;
-	}
-
 	// Create a blob from the shader code
 	Microsoft::WRL::ComPtr<IDxcBlobEncoding> sourceBlob;
-	hr = utils->CreateBlob(shaderCode.data(), static_cast<UINT32>(shaderCode.size()), CP_UTF8, &sourceBlob);
+	HRESULT hr = utils_->CreateBlob(shaderCode.data(), static_cast<UINT32>(shaderCode.size()), CP_UTF8, &sourceBlob);
 	if (FAILED(hr))
 	{
 		logw("Failed to create source blob");
@@ -82,7 +160,6 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 		compileArgs.push_back(targetProfile.c_str());
 	}
 
-	// Add shader model 6.6
 	compileArgs.push_back(L"-HV");
 	compileArgs.push_back(L"2021");
 
@@ -127,7 +204,7 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 	hr = compiler_->Compile(&sourceBuffer,
 							compileArgs.data(),
 							static_cast<UINT32>(compileArgs.size()),
-							includeHandler.Get(),
+							includeHandler_.Get(),
 							IID_PPV_ARGS(&compileResult));
 
 	if (FAILED(hr))
@@ -164,9 +241,37 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 		return result;
 	}
 
-	// Store the compiled blob for the entry point
-	std::string entryPointName = entryPoint.empty() ? "main" : std::string(entryPoint.begin(), entryPoint.end());
-	result.compiledBlobs[entryPointName] = shaderBlob;
+	CompiledShader compiledShader;
+	compiledShader.entryPoint = entryPoint.empty() ? "main" : std::string(entryPoint.begin(), entryPoint.end());
+	compiledShader.stage = StageFromTargetProfile(targetProfile);
+	compiledShader.blob = shaderBlob;
+
+	Microsoft::WRL::ComPtr<IDxcBlob> reflectionBlob;
+	compileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&reflectionBlob), nullptr);
+	if (reflectionBlob && reflectionBlob->GetBufferSize() > 0)
+	{
+		compiledShader.reflectionBlob = reflectionBlob;
+	}
+
+	IDxcBlob *reflectionSource = compiledShader.reflectionBlob ? compiledShader.reflectionBlob.Get() : shaderBlob.Get();
+	DxcBuffer reflectionBuffer = { reflectionSource->GetBufferPointer(), reflectionSource->GetBufferSize(), 0 };
+
+	if (compiledShader.stage == ShaderStage::LIBRARY)
+	{
+		hr = utils_->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(&compiledShader.libraryReflection));
+	}
+	else
+	{
+		hr = utils_->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(&compiledShader.shaderReflection));
+	}
+	if (FAILED(hr))
+	{
+		logw("Failed to create shader reflection for entry point '{}' ({} shader)",
+			 compiledShader.entryPoint.c_str(),
+			 ShaderStageToString(compiledShader.stage));
+	}
+
+	result.shaders.push_back(std::move(compiledShader));
 
 	// Try to get the root signature from the shader
 	Microsoft::WRL::ComPtr<IDxcBlob> rootSigBlob;
@@ -177,5 +282,29 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 	}
 
 	result.success = true;
+	return result;
+}
+
+ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstring &shaderPath,
+																std::span<const ShaderEntryPoint> entryPoints,
+																const std::vector<std::wstring> &arguments)
+{
+	ShaderCompilationResult result;
+	if (entryPoints.empty())
+	{
+		logw("CompileShaderFromFile called with no entry points");
+		return result;
+	}
+
+	result.success = true;
+	for (const auto &entry: entryPoints)
+	{
+		result.Merge(CompileShaderFromFile(shaderPath, entry.entryPoint, entry.targetProfile, arguments));
+		if (!result.success)
+		{
+			return result;
+		}
+	}
+
 	return result;
 }

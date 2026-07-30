@@ -28,20 +28,7 @@ static D3D12_PRIMITIVE_TOPOLOGY_TYPE MapPrimitiveTopologyType(PrimitiveTopology 
 
 D3D12GraphicsPipeline &D3D12GraphicsPipeline::BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult)
 {
-	if (!compileResult.rootSignatureBlob || compileResult.rootSignatureBlob->GetBufferSize() == 0)
-	{
-		throw D3D12Exception("No root signature found in shader. Make sure to define 'rootSig' in the shader.", E_FAIL);
-	}
-
-	HRESULT hr = device_->CreateRootSignature(0,
-											  compileResult.rootSignatureBlob->GetBufferPointer(),
-											  compileResult.rootSignatureBlob->GetBufferSize(),
-											  IID_PPV_ARGS(&rootSignature_));
-	if (FAILED(hr))
-	{
-		throw D3D12Exception("Failed to create root signature from shader", hr);
-	}
-
+	rootSignature_ = CreateRootSignatureForShader(device_.Get(), compileResult, false, reflectedRootSignature_);
 	return *this;
 }
 
@@ -54,10 +41,7 @@ void D3D12GraphicsPipeline::BuildGraphicsPipeline(const GraphicsPipelineCreateIn
 	}
 
 	// Mesh shader present? Route to the mesh pipeline path before any VS logic.
-	auto msIt = compileResult.compiledBlobs.find("meshMain");
-	if (msIt == compileResult.compiledBlobs.end())
-		msIt = compileResult.compiledBlobs.find("MSMain");
-	if (msIt != compileResult.compiledBlobs.end())
+	if (compileResult.Has(ShaderStage::MESH))
 	{
 		BuildMeshShaderPipeline(pipelineInfo, compileResult);
 		return;
@@ -66,60 +50,42 @@ void D3D12GraphicsPipeline::BuildGraphicsPipeline(const GraphicsPipelineCreateIn
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 	psoDesc.pRootSignature = rootSignature_.Get();
 
-	// Check for vertex shader
-	auto vsIt = compileResult.compiledBlobs.find("vertexMain");
-	if (vsIt == compileResult.compiledBlobs.end())
+	const CompiledShader *vertexShader = compileResult.Find(ShaderStage::VERTEX);
+	if (!vertexShader)
 	{
-		vsIt = compileResult.compiledBlobs.find("VSMain");
-	}
-	if (vsIt == compileResult.compiledBlobs.end())
-	{
-		vsIt = compileResult.compiledBlobs.find("main");
+		throw D3D12Exception("Vertex shader is required for a graphics pipeline", E_INVALIDARG);
 	}
 
-	if (vsIt != compileResult.compiledBlobs.end())
+	psoDesc.VS = { vertexShader->blob->GetBufferPointer(), vertexShader->blob->GetBufferSize() };
+
+	// Pixel shader (optional - depth-only passes have none)
+	if (const CompiledShader *pixelShader = compileResult.Find(ShaderStage::PIXEL))
 	{
-		// Traditional vertex + pixel pipeline
-		psoDesc.VS = { vsIt->second->GetBufferPointer(), vsIt->second->GetBufferSize() };
+		psoDesc.PS = { pixelShader->blob->GetBufferPointer(), pixelShader->blob->GetBufferSize() };
+	}
 
-		// Check for pixel shader
-		auto psIt = compileResult.compiledBlobs.find("pixelMain");
-		if (psIt == compileResult.compiledBlobs.end())
-		{
-			psIt = compileResult.compiledBlobs.find("PSMain");
-		}
-		if (psIt == compileResult.compiledBlobs.end())
-		{
-			psIt = compileResult.compiledBlobs.find("fragmentMain");
-		}
-		if (psIt != compileResult.compiledBlobs.end())
-		{
-			psoDesc.PS = { psIt->second->GetBufferPointer(), psIt->second->GetBufferSize() };
-		}
+	// Input layout for vertex shader
+	std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
 
-		// Input layout for vertex shader
-		std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
-
-		if (!pipelineInfo.inputElements.empty())
+	if (!pipelineInfo.inputElements.empty())
+	{
+		for (const auto &elem: pipelineInfo.inputElements)
 		{
-			for (const auto &elem: pipelineInfo.inputElements)
-			{
-				D3D12_INPUT_ELEMENT_DESC desc = {};
-				desc.SemanticName = elem.semanticName;
-				desc.SemanticIndex = elem.semanticIndex;
-				desc.Format = elem.format;
-				desc.InputSlot = elem.inputSlot;
-				desc.AlignedByteOffset = elem.alignedByteOffset;
-				desc.InputSlotClass = elem.inputSlotClass;
-				desc.InstanceDataStepRate = elem.instanceDataStepRate;
-				inputLayout.push_back(desc);
-			}
-			psoDesc.InputLayout = { inputLayout.data(), static_cast<UINT>(inputLayout.size()) };
+			D3D12_INPUT_ELEMENT_DESC desc = {};
+			desc.SemanticName = elem.semanticName;
+			desc.SemanticIndex = elem.semanticIndex;
+			desc.Format = elem.format;
+			desc.InputSlot = elem.inputSlot;
+			desc.AlignedByteOffset = elem.alignedByteOffset;
+			desc.InputSlotClass = elem.inputSlotClass;
+			desc.InstanceDataStepRate = elem.instanceDataStepRate;
+			inputLayout.push_back(desc);
 		}
-		else
-		{
-			psoDesc.InputLayout = { nullptr, 0 };
-		}
+		psoDesc.InputLayout = { inputLayout.data(), static_cast<UINT>(inputLayout.size()) };
+	}
+	else
+	{
+		psoDesc.InputLayout = { nullptr, 0 };
 	}
 
 	// Rasterizer state
@@ -223,44 +189,25 @@ void D3D12GraphicsPipeline::BuildMeshShaderPipeline(const GraphicsPipelineCreate
 	psoStream.RootSignature = rootSignature_.Get();
 
 	// Amplification shader (optional)
-	auto asIt = compileResult.compiledBlobs.find("amplificationMain");
-	if (asIt == compileResult.compiledBlobs.end())
+	if (const CompiledShader *amplificationShader = compileResult.Find(ShaderStage::AMPLIFICATION))
 	{
-		asIt = compileResult.compiledBlobs.find("ASMain");
-	}
-	if (asIt != compileResult.compiledBlobs.end())
-	{
-		psoStream.AS = CD3DX12_SHADER_BYTECODE(asIt->second->GetBufferPointer(), asIt->second->GetBufferSize());
+		psoStream.AS = CD3DX12_SHADER_BYTECODE(amplificationShader->blob->GetBufferPointer(),
+											   amplificationShader->blob->GetBufferSize());
 	}
 
 	// Mesh shader (required)
-	auto msIt = compileResult.compiledBlobs.find("meshMain");
-	if (msIt == compileResult.compiledBlobs.end())
-	{
-		msIt = compileResult.compiledBlobs.find("MSMain");
-	}
-	if (msIt != compileResult.compiledBlobs.end())
-	{
-		psoStream.MS = CD3DX12_SHADER_BYTECODE(msIt->second->GetBufferPointer(), msIt->second->GetBufferSize());
-	}
-	else
+	const CompiledShader *meshShader = compileResult.Find(ShaderStage::MESH);
+	if (!meshShader)
 	{
 		throw D3D12Exception("Mesh shader is required for mesh shader pipeline", E_INVALIDARG);
 	}
+	psoStream.MS = CD3DX12_SHADER_BYTECODE(meshShader->blob->GetBufferPointer(), meshShader->blob->GetBufferSize());
 
 	// Pixel shader (optional but typically present)
-	auto psIt = compileResult.compiledBlobs.find("pixelMain");
-	if (psIt == compileResult.compiledBlobs.end())
+	if (const CompiledShader *pixelShader = compileResult.Find(ShaderStage::PIXEL))
 	{
-		psIt = compileResult.compiledBlobs.find("PSMain");
-	}
-	if (psIt == compileResult.compiledBlobs.end())
-	{
-		psIt = compileResult.compiledBlobs.find("fragmentMain");
-	}
-	if (psIt != compileResult.compiledBlobs.end())
-	{
-		psoStream.PS = CD3DX12_SHADER_BYTECODE(psIt->second->GetBufferPointer(), psIt->second->GetBufferSize());
+		psoStream.PS = CD3DX12_SHADER_BYTECODE(pixelShader->blob->GetBufferPointer(),
+											   pixelShader->blob->GetBufferSize());
 	}
 
 	// Blend state
@@ -364,20 +311,7 @@ void D3D12GraphicsPipeline::BuildMeshShaderPipeline(const GraphicsPipelineCreate
 
 D3D12ComputePipeline &D3D12ComputePipeline::BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult)
 {
-	if (!compileResult.rootSignatureBlob || compileResult.rootSignatureBlob->GetBufferSize() == 0)
-	{
-		throw D3D12Exception("No root signature found in shader. Make sure to define 'rootSig' in the shader.", E_FAIL);
-	}
-
-	HRESULT hr = device_->CreateRootSignature(0,
-											  compileResult.rootSignatureBlob->GetBufferPointer(),
-											  compileResult.rootSignatureBlob->GetBufferSize(),
-											  IID_PPV_ARGS(&rootSignature_));
-	if (FAILED(hr))
-	{
-		throw D3D12Exception("Failed to create root signature from shader", hr);
-	}
-
+	rootSignature_ = CreateRootSignatureForShader(device_.Get(), compileResult, false, reflectedRootSignature_);
 	return *this;
 }
 
@@ -388,22 +322,8 @@ void D3D12ComputePipeline::BuildComputePipeline(const ShaderCompilationResult &c
 		throw D3D12Exception("Root signature must be built before compute pipeline", E_FAIL);
 	}
 
-	// Find compute shader - try different common entry point names, then fall back to first blob
-	auto csIt = compileResult.compiledBlobs.find("computeMain");
-	if (csIt == compileResult.compiledBlobs.end())
-	{
-		csIt = compileResult.compiledBlobs.find("CSMain");
-	}
-	if (csIt == compileResult.compiledBlobs.end())
-	{
-		csIt = compileResult.compiledBlobs.find("main");
-	}
-	if (csIt == compileResult.compiledBlobs.end())
-	{
-		// Fall back to the first available blob (e.g. Pass0, Pass1, Pass2, etc.)
-		csIt = compileResult.compiledBlobs.begin();
-	}
-	if (csIt == compileResult.compiledBlobs.end())
+	const CompiledShader *computeShader = compileResult.Find(ShaderStage::COMPUTE);
+	if (!computeShader)
 	{
 		throw D3D12Exception("Compute shader is required for compute pipeline", E_INVALIDARG);
 	}
@@ -411,7 +331,7 @@ void D3D12ComputePipeline::BuildComputePipeline(const ShaderCompilationResult &c
 	// Create compute pipeline state
 	D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
 	psoDesc.pRootSignature = rootSignature_.Get();
-	psoDesc.CS = CD3DX12_SHADER_BYTECODE(csIt->second->GetBufferPointer(), csIt->second->GetBufferSize());
+	psoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader->blob->GetBufferPointer(), computeShader->blob->GetBufferSize());
 	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
 	HRESULT hr = device_->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState_));
@@ -423,20 +343,7 @@ void D3D12ComputePipeline::BuildComputePipeline(const ShaderCompilationResult &c
 
 D3D12RaytracingPipeline &D3D12RaytracingPipeline::BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult)
 {
-	if (!compileResult.rootSignatureBlob || compileResult.rootSignatureBlob->GetBufferSize() == 0)
-	{
-		throw D3D12Exception("No root signature found in shader. Make sure to define 'rootSig' in the shader.", E_FAIL);
-	}
-
-	HRESULT hr = device_->CreateRootSignature(0,
-											  compileResult.rootSignatureBlob->GetBufferPointer(),
-											  compileResult.rootSignatureBlob->GetBufferSize(),
-											  IID_PPV_ARGS(&rootSignature_));
-	if (FAILED(hr))
-	{
-		throw D3D12Exception("Failed to create root signature from shader", hr);
-	}
-
+	rootSignature_ = CreateRootSignatureForShader(device_.Get(), compileResult, true, reflectedRootSignature_);
 	return *this;
 }
 
@@ -448,6 +355,8 @@ D3D12RaytracingPipeline &D3D12RaytracingPipeline::SetGlobalRootSignature(Microso
 	}
 
 	rootSignature_ = rootSignature;
+	// A caller-supplied root signature has no reflected layout to report.
+	reflectedRootSignature_ = {};
 	return *this;
 }
 
@@ -467,14 +376,9 @@ void D3D12RaytracingPipeline::BuildRaytracingPipeline(const RaytracingPipelineCr
 		throw D3D12Exception("Raytracing is not supported on this device", E_NOTIMPL);
 	}
 
-	// The whole DXIL library is expected to be compiled as a single lib_6_x blob (entry point
-	// left empty so DXCompiler stores it under "main").
-	auto libIt = compileResult.compiledBlobs.find("main");
-	if (libIt == compileResult.compiledBlobs.end())
-	{
-		libIt = compileResult.compiledBlobs.begin();
-	}
-	if (libIt == compileResult.compiledBlobs.end())
+	// The whole DXIL library is expected to be compiled as a single lib_6_x blob.
+	const CompiledShader *library = compileResult.Find(ShaderStage::LIBRARY);
+	if (!library)
 	{
 		throw D3D12Exception("DXIL library is required for raytracing pipeline", E_INVALIDARG);
 	}
@@ -483,7 +387,7 @@ void D3D12RaytracingPipeline::BuildRaytracingPipeline(const RaytracingPipelineCr
 
 	// DXIL library + exports
 	auto lib = raytracingPipelineDesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-	CD3DX12_SHADER_BYTECODE libraryBytecode(libIt->second->GetBufferPointer(), libIt->second->GetBufferSize());
+	CD3DX12_SHADER_BYTECODE libraryBytecode(library->blob->GetBufferPointer(), library->blob->GetBufferSize());
 	lib->SetDXILLibrary(&libraryBytecode);
 	for (const auto &exportName: pipelineInfo.exports)
 	{

@@ -1,6 +1,8 @@
 #pragma once
 #include "pch.h"
 
+#include "D3D12RootSignatureBuilder.h"
+
 struct ShaderCompilationResult;
 
 enum class PrimitiveTopology : uint32_t
@@ -227,6 +229,11 @@ public:
 		return pipelineState_;
 	}
 
+	const ReflectedRootSignature &GetReflectedRootSignature() const
+	{
+		return reflectedRootSignature_;
+	}
+
 private:
 	void BuildMeshShaderPipeline(const GraphicsPipelineCreateInfo &pipelineInfo,
 								 const ShaderCompilationResult &compileResult);
@@ -234,6 +241,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
+	ReflectedRootSignature reflectedRootSignature_;
 };
 
 class D3D12ComputePipeline
@@ -254,15 +262,18 @@ public:
 		return pipelineState_;
 	}
 
+	const ReflectedRootSignature &GetReflectedRootSignature() const
+	{
+		return reflectedRootSignature_;
+	}
+
 private:
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
+	ReflectedRootSignature reflectedRootSignature_;
 };
 
-// A hit group binds a named export ("HitGroupExport") to the closest hit / any hit /
-// intersection shader exports that make it up. Triangle geometry typically only needs
-// closestHitExport (+ optionally anyHitExport); intersectionExport is for procedural geometry.
 struct RaytracingHitGroupDesc
 {
 	std::wstring hitGroupExport;
@@ -317,9 +328,15 @@ public:
 		return stateObjectProperties_;
 	}
 
+	const ReflectedRootSignature &GetReflectedRootSignature() const
+	{
+		return reflectedRootSignature_;
+	}
+
 private:
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<ID3D12StateObject> stateObject_;
 	Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> stateObjectProperties_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
+	ReflectedRootSignature reflectedRootSignature_;
 };

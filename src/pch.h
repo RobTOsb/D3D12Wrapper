@@ -2,13 +2,13 @@
 
 #include "directx/d3d12.h"
 
-#include <d3d11on12.h>
-
 #include "directx/d3dx12.h"
 
 #include "directx/d3d12sdklayers.h"
 
 #include <dxcapi.h>
+
+#include <d3d12shader.h>
 
 #include "D3D12MemAlloc.h"
 
