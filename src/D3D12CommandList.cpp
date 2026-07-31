@@ -314,6 +314,34 @@ void D3D12CommandList::SetTextureBarrier(D3D12Resource *resource,
 	SetBarriers(1, &g);
 }
 
+void D3D12CommandList::SetTextureBarrier(D3D12Resource *resource,
+										 D3D12_BARRIER_LAYOUT layoutBefore,
+										 D3D12_BARRIER_SYNC syncBefore,
+										 D3D12_BARRIER_ACCESS accessBefore,
+										 D3D12_BARRIER_LAYOUT layoutAfter,
+										 D3D12_BARRIER_SYNC syncAfter,
+										 D3D12_BARRIER_ACCESS accessAfter)
+{
+	const D3D12_RESOURCE_DESC desc = resource->GetResource()->GetDesc();
+	const UINT arraySlices = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1 : desc.DepthOrArraySize;
+
+	D3D12_TEXTURE_BARRIER b = {};
+	b.SyncBefore = syncBefore;
+	b.SyncAfter = syncAfter;
+	b.AccessBefore = accessBefore;
+	b.AccessAfter = accessAfter;
+	b.LayoutBefore = layoutBefore;
+	b.LayoutAfter = layoutAfter;
+	b.pResource = resource->GetResource();
+	b.Subresources = CD3DX12_BARRIER_SUBRESOURCE_RANGE(0, desc.MipLevels, 0, arraySlices, 0, 1);
+	b.Flags = D3D12_TEXTURE_BARRIER_FLAG_NONE;
+	D3D12_BARRIER_GROUP g = {};
+	g.Type = D3D12_BARRIER_TYPE_TEXTURE;
+	g.NumBarriers = 1;
+	g.pTextureBarriers = &b;
+	SetBarriers(1, &g);
+}
+
 void D3D12CommandList::SetBufferBarrier(D3D12Resource *resource,
 										D3D12_BARRIER_SYNC syncBefore,
 										D3D12_BARRIER_ACCESS accessBefore,
@@ -484,7 +512,6 @@ void D3D12CommandList::SetGraphics32BitConstants(uint32_t rootParameterIndex,
 	commandList_->SetGraphicsRoot32BitConstants(rootParameterIndex, numConstants, pConstants, destOffsetIn32BitValues);
 }
 
-// Just aliases for clarity
 void D3D12CommandList::BeginCommandList()
 {
 	Reset();

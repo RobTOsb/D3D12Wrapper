@@ -5,7 +5,7 @@
 
 struct ShaderCompilationResult;
 
-enum class PrimitiveTopology : uint32_t
+enum class D3D12PrimitiveTopology : uint32_t
 {
 	POINT_LIST,
 	LINE_LIST,
@@ -203,7 +203,7 @@ struct GraphicsPipelineCreateInfo
 	std::vector<DXGI_FORMAT> rtvFormats;
 	DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN;
 	// Topology
-	PrimitiveTopology primitiveTopology = PrimitiveTopology::TRIANGLE_LIST;
+	D3D12PrimitiveTopology primitiveTopology = D3D12PrimitiveTopology::TRIANGLE_LIST;
 
 	// Sample desc
 	uint32_t sampleCount = 1;

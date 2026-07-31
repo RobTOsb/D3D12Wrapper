@@ -42,6 +42,13 @@ public:
 						   D3D12_BARRIER_LAYOUT layoutAfter,
 						   D3D12_BARRIER_SYNC syncAfter,
 						   D3D12_BARRIER_ACCESS accessAfter);
+	void SetTextureBarrier(D3D12Resource *resource,
+						   D3D12_BARRIER_LAYOUT layoutBefore,
+						   D3D12_BARRIER_SYNC syncBefore,
+						   D3D12_BARRIER_ACCESS accessBefore,
+						   D3D12_BARRIER_LAYOUT layoutAfter,
+						   D3D12_BARRIER_SYNC syncAfter,
+						   D3D12_BARRIER_ACCESS accessAfter);
 
 	void SetBufferBarrier(D3D12Resource *resource,
 						  D3D12_BARRIER_SYNC syncBefore,

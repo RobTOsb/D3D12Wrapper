@@ -58,5 +58,5 @@ using D3D12ResourceDesc = CD3DX12_RESOURCE_DESC;
 using D3D12ResourceDesc1 = CD3DX12_RESOURCE_DESC1;
 
 using DescriptorHandle = uint32_t;
-
 static constexpr DescriptorHandle InvalidDescriptorHandle = UINT32_MAX;
+

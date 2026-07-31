@@ -3,23 +3,23 @@
 #include "D3D12Exception.h"
 #include "DXCompiler.h"
 
-static D3D12_PRIMITIVE_TOPOLOGY_TYPE MapPrimitiveTopologyType(PrimitiveTopology topology)
+static D3D12_PRIMITIVE_TOPOLOGY_TYPE MapPrimitiveTopologyType(D3D12PrimitiveTopology topology)
 {
 	switch (topology)
 	{
-		case PrimitiveTopology::POINT_LIST:
+		case D3D12PrimitiveTopology::POINT_LIST:
 			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-		case PrimitiveTopology::LINE_LIST:
-		case PrimitiveTopology::LINE_STRIP:
-		case PrimitiveTopology::LINE_LIST_ADJ:
-		case PrimitiveTopology::LINE_STRIP_ADJ:
+		case D3D12PrimitiveTopology::LINE_LIST:
+		case D3D12PrimitiveTopology::LINE_STRIP:
+		case D3D12PrimitiveTopology::LINE_LIST_ADJ:
+		case D3D12PrimitiveTopology::LINE_STRIP_ADJ:
 			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-		case PrimitiveTopology::TRIANGLE_LIST:
-		case PrimitiveTopology::TRIANGLE_STRIP:
-		case PrimitiveTopology::TRIANGLE_LIST_ADJ:
-		case PrimitiveTopology::TRIANGLE_STRIP_ADJ:
+		case D3D12PrimitiveTopology::TRIANGLE_LIST:
+		case D3D12PrimitiveTopology::TRIANGLE_STRIP:
+		case D3D12PrimitiveTopology::TRIANGLE_LIST_ADJ:
+		case D3D12PrimitiveTopology::TRIANGLE_STRIP_ADJ:
 			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		case PrimitiveTopology::PATCH_LIST:
+		case D3D12PrimitiveTopology::PATCH_LIST:
 			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
 		default:
 			return D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
