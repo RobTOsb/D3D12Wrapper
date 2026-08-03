@@ -380,7 +380,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		}
 
 		const uint32_t requiredDwords = (sizeInBytes + 3) / 4;
-		rootConstantCount = (std::max)(rootConstantCount, requiredDwords);
+		rootConstantCount = (std::min)((std::max)(rootConstantCount, requiredDwords), kMaxRootConstantCount);
 
 		// The reserved slot replaces this binding rather than being additional to it.
 		bindings.erase(it);
@@ -443,6 +443,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		record.registerSpace = binding.registerSpace;
 		record.baseShaderRegister = binding.baseShaderRegister;
 		record.bindCount = binding.bindCount;
+		record.name = binding.name;
 
 		if (CanBeRootDescriptor(binding))
 		{

@@ -489,6 +489,21 @@ void D3D12CommandList::SetGraphicsDescriptorTable(uint32_t rootParameterIndex, G
 	commandList_->SetGraphicsRootDescriptorTable(rootParameterIndex, handle);
 }
 
+void D3D12CommandList::SetGraphicsRootCBV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation)
+{
+	commandList_->SetGraphicsRootConstantBufferView(rootParameterIndex, bufferLocation);
+}
+
+void D3D12CommandList::SetGraphicsRootSRV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation)
+{
+	commandList_->SetGraphicsRootShaderResourceView(rootParameterIndex, bufferLocation);
+}
+
+void D3D12CommandList::SetGraphicsRootUAV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation)
+{
+	commandList_->SetGraphicsRootUnorderedAccessView(rootParameterIndex, bufferLocation);
+}
+
 void D3D12CommandList::SetComputeDescriptorTable(uint32_t rootParameterIndex, GPUDescriptorHandle gpuHandle)
 {
 	D3D12_GPU_DESCRIPTOR_HANDLE handle;

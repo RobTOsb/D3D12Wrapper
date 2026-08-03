@@ -4,7 +4,8 @@
 
 struct ShaderCompilationResult;
 
-inline constexpr uint32_t kMinRootConstantCount = 8;
+inline constexpr uint32_t kMinRootConstantCount = 1;
+inline constexpr uint32_t kMaxRootConstantCount = 16;
 
 inline constexpr uint32_t kStaticSamplerCount = 11;
 
@@ -16,6 +17,7 @@ struct ReflectedRootBinding
 	uint32_t bindCount = 1;
 	uint32_t rootParameterIndex = 0;
 	bool isDescriptorTable = false;
+	std::string name; // resource variable name, from DXC reflection
 };
 
 struct ReflectedRootSignature

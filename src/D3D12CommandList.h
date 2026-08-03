@@ -119,12 +119,18 @@ public:
 	void SetComputePipeline(D3D12ComputePipeline *pipeline);
 	void SetRaytracingPipeline(D3D12RaytracingPipeline *pipeline);
 	void SetGraphicsDescriptorTable(uint32_t rootParameterIndex, GPUDescriptorHandle gpuHandle);
+	void SetGraphicsRootCBV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
+	void SetGraphicsRootSRV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
+	void SetGraphicsRootUAV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
 	void SetGraphics32BitConstants(uint32_t rootParameterIndex,
 								   uint32_t numConstants,
 								   const void *pConstants,
 								   uint32_t destOffsetIn32BitValues);
 
 	void SetComputeDescriptorTable(uint32_t rootParameterIndex, GPUDescriptorHandle gpuHandle);
+	void SetComputeRootCBV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
+	void SetComputeRootSRV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
+	void SetComputeRootUAV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
 	void SetCompute32BitConstants(uint32_t rootParameterIndex,
 								  uint32_t numConstants,
 								  const void *pConstants,
