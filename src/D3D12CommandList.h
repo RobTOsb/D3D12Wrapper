@@ -158,6 +158,10 @@ public:
 						 uint32_t value,
 						 D3D12_WRITEBUFFERIMMEDIATE_MODE mode = D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN);
 
+	// GPU debug annotation (shows up as nested events in RenderDoc/PIX).
+	void BeginEvent(const char *label);
+	void EndEvent();
+
 private:
 	std::unique_ptr<D3D12CommandAllocator> ownedAllocator_; // non-null only for self-contained lists
 	D3D12CommandAllocator *commandAllocator_;

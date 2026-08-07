@@ -20,12 +20,28 @@ struct ReflectedRootBinding
 	std::string name; // resource variable name, from DXC reflection
 };
 
+inline constexpr uint32_t kNoRootConstantParameter = UINT32_MAX;
+
+// A named scalar/vector variable found inside a reflected cbuffer (almost always the implicit
+// $Globals DXC packs loose top-level variables into). Lets a single variable be updated by name
+// without the caller needing to know which cbuffer DXC happened to pack it into, or at what offset.
+struct ReflectedScalar
+{
+	std::string name; // HLSL variable name, from DXC reflection
+	std::string cbufferName; // the cbuffer this variable lives in, e.g. "$Globals"
+	uint32_t byteOffset = 0; // offset of this variable within that cbuffer
+	uint32_t byteSize = 0;
+	uint32_t cbufferByteSize = 0; // total size of the cbuffer named by cbufferName
+};
+
 struct ReflectedRootSignature
 {
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
-	Microsoft::WRL::ComPtr<ID3DBlob> serializedBlob; 
+	Microsoft::WRL::ComPtr<ID3DBlob> serializedBlob;
 	std::vector<ReflectedRootBinding> bindings;
-	uint32_t rootConstantParameterIndex = 0;
+	std::vector<ReflectedScalar> scalars;
+	// kNoRootConstantParameter if no g_PushConstants/pushConstants buffer was reflected at all.
+	uint32_t rootConstantParameterIndex = kNoRootConstantParameter;
 	uint32_t rootConstantCount = 0;
 };
 

@@ -80,6 +80,13 @@ public:
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO &outInfo);
 	std::unique_ptr<D3D12Resource> CreateAccelerationStructureBuffer(uint64_t size, bool isScratch = false);
 
+	Microsoft::WRL::ComPtr<ID3D12CommandSignature> CreateDispatchIndirectCommandSignature(
+			ID3D12RootSignature *rootSignature, uint32_t rootConstantsSizeInBytes);
+	Microsoft::WRL::ComPtr<ID3D12CommandSignature> CreateDrawIndirectCommandSignature(
+			ID3D12RootSignature *rootSignature, uint32_t rootConstantsSizeInBytes);
+	Microsoft::WRL::ComPtr<ID3D12CommandSignature> CreateDispatchMeshIndirectCommandSignature(
+			ID3D12RootSignature *rootSignature, uint32_t rootConstantsSizeInBytes);
+
 	Microsoft::WRL::ComPtr<ID3D12Device> GetNativeDevice() const
 	{
 		return device_;

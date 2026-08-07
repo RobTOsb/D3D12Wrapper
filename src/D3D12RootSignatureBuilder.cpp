@@ -169,6 +169,100 @@ namespace
 		return 0;
 	}
 
+	// Records every variable inside the given cbuffer (its name, byte offset/size, and which cbuffer
+	// it lives in) so a single variable can later be updated by name without knowing which cbuffer
+	// DXC packed it into - primarily for loose top-level globals DXC packs into $Globals.
+	void AddScalarsFromConstantBuffer(ID3D12ShaderReflectionConstantBuffer *constantBuffer,
+									  std::vector<ReflectedScalar> &outScalars)
+	{
+		D3D12_SHADER_BUFFER_DESC bufferDesc = {};
+		if (!constantBuffer || FAILED(constantBuffer->GetDesc(&bufferDesc)))
+		{
+			return;
+		}
+
+		for (UINT i = 0; i < bufferDesc.Variables; ++i)
+		{
+			auto *variable = constantBuffer->GetVariableByIndex(i);
+			if (!variable)
+			{
+				continue;
+			}
+
+			D3D12_SHADER_VARIABLE_DESC variableDesc = {};
+			if (FAILED(variable->GetDesc(&variableDesc)) || !variableDesc.Name)
+			{
+				continue;
+			}
+
+			const bool alreadyKnown =
+					std::any_of(outScalars.begin(),
+							   outScalars.end(),
+							   [&](const ReflectedScalar &scalar) { return scalar.name == variableDesc.Name; });
+			if (alreadyKnown)
+			{
+				continue;
+			}
+
+			ReflectedScalar scalar;
+			scalar.name = variableDesc.Name;
+			scalar.cbufferName = bufferDesc.Name ? bufferDesc.Name : "";
+			scalar.byteOffset = variableDesc.StartOffset;
+			scalar.byteSize = variableDesc.Size;
+			scalar.cbufferByteSize = bufferDesc.Size;
+			outScalars.push_back(std::move(scalar));
+		}
+	}
+
+	// Walks every compiled stage and collects every variable in every reflected cbuffer, by name.
+	void CollectScalars(const ShaderCompilationResult &compileResult, std::vector<ReflectedScalar> &outScalars)
+	{
+		for (const auto &shader: compileResult.shaders)
+		{
+			if (shader.shaderReflection)
+			{
+				D3D12_SHADER_DESC shaderDesc = {};
+				if (FAILED(shader.shaderReflection->GetDesc(&shaderDesc)))
+				{
+					continue;
+				}
+
+				for (UINT i = 0; i < shaderDesc.ConstantBuffers; ++i)
+				{
+					AddScalarsFromConstantBuffer(shader.shaderReflection->GetConstantBufferByIndex(i), outScalars);
+				}
+			}
+			else if (shader.libraryReflection)
+			{
+				D3D12_LIBRARY_DESC libraryDesc = {};
+				if (FAILED(shader.libraryReflection->GetDesc(&libraryDesc)))
+				{
+					continue;
+				}
+
+				for (UINT f = 0; f < libraryDesc.FunctionCount; ++f)
+				{
+					auto *function = shader.libraryReflection->GetFunctionByIndex(static_cast<INT>(f));
+					if (!function)
+					{
+						continue;
+					}
+
+					D3D12_FUNCTION_DESC functionDesc = {};
+					if (FAILED(function->GetDesc(&functionDesc)))
+					{
+						continue;
+					}
+
+					for (UINT i = 0; i < functionDesc.ConstantBuffers; ++i)
+					{
+						AddScalarsFromConstantBuffer(function->GetConstantBufferByIndex(i), outScalars);
+					}
+				}
+			}
+		}
+	}
+
 	// Walks every compiled stage and unions the resources they bind.
 	void CollectBindings(const ShaderCompilationResult &compileResult,
 						 std::vector<ReflectedBinding> &outBindings,
@@ -357,14 +451,21 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 	}
 
 	ReflectedRootSignature result;
+	CollectScalars(compileResult, result.scalars);
 
-	// Root parameter 0 is always the reserved 32-bit constant block at b0, space0. If the shader
-	// declares a constant buffer there, size the block to fit it (never below the minimum).
-	uint32_t rootConstantCount = kMinRootConstantCount;
+	// Find the push-constants buffer purely by name, wherever DXC happened to put it - no register
+	// is reserved up front. A shader is free to leave b0/space0 unused, or put an ordinary CBV there;
+	// only a CBV actually named g_PushConstants/pushConstants becomes the root-constants parameter.
+	// If no entry point in this pipeline references it, it simply won't be in the reflected bindings
+	// and this pipeline gets no root-constants parameter at all.
+	bool hasRootConstants = false;
+	uint32_t rootConstantCount = 0;
+	uint32_t rootConstantsRegister = 0;
+	uint32_t rootConstantsSpace = 0;
 	for (auto it = bindings.begin(); it != bindings.end(); ++it)
 	{
-		if (it->rangeType != D3D12_DESCRIPTOR_RANGE_TYPE_CBV || it->registerSpace != 0 ||
-			it->baseShaderRegister != 0)
+		if (it->rangeType != D3D12_DESCRIPTOR_RANGE_TYPE_CBV ||
+			(it->name != "g_PushConstants" && it->name != "pushConstants"))
 		{
 			continue;
 		}
@@ -380,9 +481,12 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		}
 
 		const uint32_t requiredDwords = (sizeInBytes + 3) / 4;
-		rootConstantCount = (std::min)((std::max)(rootConstantCount, requiredDwords), kMaxRootConstantCount);
+		rootConstantCount = (std::min)((std::max)(kMinRootConstantCount, requiredDwords), kMaxRootConstantCount);
+		hasRootConstants = true;
+		rootConstantsRegister = it->baseShaderRegister;
+		rootConstantsSpace = it->registerSpace;
 
-		// The reserved slot replaces this binding rather than being additional to it.
+		// The root-constants parameter replaces this binding rather than being additional to it.
 		bindings.erase(it);
 		break;
 	}
@@ -391,7 +495,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 			  bindings.end(),
 			  [](const ReflectedBinding &a, const ReflectedBinding &b)
 			  {
-				  // Unbounded ranges must come last within a descriptor table.
+				  // Purely for deterministic root parameter ordering; unbounded ranges sort last.
 				  const bool aUnbounded = a.bindCount == 0;
 				  const bool bUnbounded = b.bindCount == 0;
 				  if (aUnbounded != bUnbounded)
@@ -405,20 +509,24 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 
 	std::vector<D3D12_ROOT_PARAMETER1> parameters;
 
-	D3D12_ROOT_PARAMETER1 rootConstants = {};
-	rootConstants.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootConstants.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-	rootConstants.Constants.ShaderRegister = 0;
-	rootConstants.Constants.RegisterSpace = 0;
-	rootConstants.Constants.Num32BitValues = rootConstantCount;
-	parameters.push_back(rootConstants);
+	if (hasRootConstants)
+	{
+		D3D12_ROOT_PARAMETER1 rootConstants = {};
+		rootConstants.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+		rootConstants.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootConstants.Constants.ShaderRegister = rootConstantsRegister;
+		rootConstants.Constants.RegisterSpace = rootConstantsSpace;
+		rootConstants.Constants.Num32BitValues = rootConstantCount;
 
-	result.rootConstantParameterIndex = 0;
-	result.rootConstantCount = rootConstantCount;
+		result.rootConstantParameterIndex = static_cast<uint32_t>(parameters.size());
+		result.rootConstantCount = rootConstantCount;
+		parameters.push_back(rootConstants);
+	}
 
-	// Root descriptors for what is legal; everything else accumulates into one descriptor table
-	// that takes the last root parameter slot.
-	std::vector<D3D12_DESCRIPTOR_RANGE1> tableRanges;
+	// Every table binding gets its own single-range table, so that binding one resource by name sets
+	// only that register - a shared multi-range table would make each bind reposition every register
+	// in it, since ranges resolve as consecutive descriptors from the table's base handle.
+	std::vector<std::vector<D3D12_DESCRIPTOR_RANGE1>> tables; // one range each
 	std::vector<size_t> tableBindingIndices;
 
 	for (const auto &binding: bindings)
@@ -480,30 +588,29 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 			range.RegisterSpace = binding.registerSpace;
 			range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
 						  D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
-			range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-			tableRanges.push_back(range);
+			// Sole range in its table, so it starts at the base handle the binder sets.
+			range.OffsetInDescriptorsFromTableStart = 0;
 
 			record.isDescriptorTable = true;
+
+			tables.push_back({ range });
 			tableBindingIndices.push_back(result.bindings.size());
 			result.bindings.push_back(record);
 		}
 	}
 
-	if (!tableRanges.empty())
+	for (size_t i = 0; i < tables.size(); ++i)
 	{
 		const uint32_t tableParameterIndex = static_cast<uint32_t>(parameters.size());
 
 		D3D12_ROOT_PARAMETER1 parameter = {};
 		parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 		parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		parameter.DescriptorTable.NumDescriptorRanges = static_cast<UINT>(tableRanges.size());
-		parameter.DescriptorTable.pDescriptorRanges = tableRanges.data();
+		parameter.DescriptorTable.NumDescriptorRanges = 1;
+		parameter.DescriptorTable.pDescriptorRanges = tables[i].data();
 		parameters.push_back(parameter);
 
-		for (size_t index: tableBindingIndices)
-		{
-			result.bindings[index].rootParameterIndex = tableParameterIndex;
-		}
+		result.bindings[tableBindingIndices[i]].rootParameterIndex = tableParameterIndex;
 	}
 
 	const uint32_t costInDwords = RootSignatureCostInDwords(parameters);

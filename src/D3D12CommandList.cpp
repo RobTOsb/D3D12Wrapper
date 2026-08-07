@@ -251,7 +251,7 @@ void D3D12CommandList::SetRaytracingPipeline(D3D12RaytracingPipeline *pipeline)
 
 void D3D12CommandList::Reset()
 {
-	// When the command list owns its allocator the allocator must be reset before the list. 
+	// When the command list owns its allocator the allocator must be reset before the list.
 	// Externally-managed allocators are reset by the caller (e.g. CommandListPool::BeginFrame) before calling Reset().
 	if (ownedAllocator_)
 		commandAllocator_->Reset();
@@ -435,11 +435,11 @@ void D3D12CommandList::ClearDepthStencil(D3D12Resource *dsvResource,
 }
 
 void D3D12CommandList::ClearUnorderedAccessViewFloat(const D3D12DescriptorHeap *gpuDescriptorHeap,
-													  DescriptorHandle gpuUavHandle,
-													  const D3D12DescriptorHeap *cpuDescriptorHeap,
-													  DescriptorHandle cpuUavHandle,
-													  D3D12Resource *uavResource,
-													  const float values[4])
+													 DescriptorHandle gpuUavHandle,
+													 const D3D12DescriptorHeap *cpuDescriptorHeap,
+													 DescriptorHandle cpuUavHandle,
+													 D3D12Resource *uavResource,
+													 const float values[4])
 {
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = gpuDescriptorHeap->GetGPUDescriptorHandle(gpuUavHandle);
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = cpuDescriptorHeap->GetCPUDescriptorHandle(cpuUavHandle);
@@ -447,11 +447,11 @@ void D3D12CommandList::ClearUnorderedAccessViewFloat(const D3D12DescriptorHeap *
 }
 
 void D3D12CommandList::ClearUnorderedAccessViewUint(const D3D12DescriptorHeap *gpuDescriptorHeap,
-													 DescriptorHandle gpuUavHandle,
-													 const D3D12DescriptorHeap *cpuDescriptorHeap,
-													 DescriptorHandle cpuUavHandle,
-													 D3D12Resource *uavResource,
-													 const uint32_t values[4])
+													DescriptorHandle gpuUavHandle,
+													const D3D12DescriptorHeap *cpuDescriptorHeap,
+													DescriptorHandle cpuUavHandle,
+													D3D12Resource *uavResource,
+													const uint32_t values[4])
 {
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = gpuDescriptorHeap->GetGPUDescriptorHandle(gpuUavHandle);
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = cpuDescriptorHeap->GetCPUDescriptorHandle(cpuUavHandle);
@@ -511,6 +511,21 @@ void D3D12CommandList::SetComputeDescriptorTable(uint32_t rootParameterIndex, GP
 	commandList_->SetComputeRootDescriptorTable(rootParameterIndex, handle);
 }
 
+void D3D12CommandList::SetComputeRootCBV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation)
+{
+	commandList_->SetComputeRootConstantBufferView(rootParameterIndex, bufferLocation);
+}
+
+void D3D12CommandList::SetComputeRootSRV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation)
+{
+	commandList_->SetComputeRootShaderResourceView(rootParameterIndex, bufferLocation);
+}
+
+void D3D12CommandList::SetComputeRootUAV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation)
+{
+	commandList_->SetComputeRootUnorderedAccessView(rootParameterIndex, bufferLocation);
+}
+
 void D3D12CommandList::SetCompute32BitConstants(uint32_t rootParameterIndex,
 												uint32_t numConstants,
 												const void *pConstants,
@@ -568,7 +583,7 @@ void D3D12CommandList::ExecuteIndirect(ID3D12CommandSignature *commandSignature,
 }
 
 void D3D12CommandList::BuildRaytracingAccelerationStructure(
-	const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc)
+		const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc)
 {
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> commandList4;
 	HRESULT hr = commandList_.As(&commandList4);
@@ -593,15 +608,15 @@ void D3D12CommandList::DispatchRays(const D3D12_DISPATCH_RAYS_DESC &desc)
 void D3D12CommandList::EmitUAVBarrier(D3D12Resource * /*resource*/)
 {
 	D3D12_GLOBAL_BARRIER globalBarrier = {};
-	globalBarrier.SyncBefore   = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
-	globalBarrier.SyncAfter    = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE
-	                             | D3D12_BARRIER_SYNC_ALL_SHADING;
+	globalBarrier.SyncBefore = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
+	globalBarrier.SyncAfter =
+			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_BARRIER_SYNC_ALL_SHADING;
 	globalBarrier.AccessBefore = D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE;
-	globalBarrier.AccessAfter  = D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ;
+	globalBarrier.AccessAfter = D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ;
 
 	D3D12_BARRIER_GROUP group = {};
-	group.Type            = D3D12_BARRIER_TYPE_GLOBAL;
-	group.NumBarriers     = 1;
+	group.Type = D3D12_BARRIER_TYPE_GLOBAL;
+	group.NumBarriers = 1;
 	group.pGlobalBarriers = &globalBarrier;
 
 	SetBarriers(1, &group);
@@ -617,3 +632,13 @@ void D3D12CommandList::WriteBreadcrumb(uint64_t destGpuVA, uint32_t value, D3D12
 	}
 }
 
+void D3D12CommandList::BeginEvent(const char *label)
+{
+	const std::wstring wLabel(label, label + strlen(label));
+	commandList_->BeginEvent(0, wLabel.c_str(), static_cast<UINT>((wLabel.size() + 1) * sizeof(wchar_t)));
+}
+
+void D3D12CommandList::EndEvent()
+{
+	commandList_->EndEvent();
+}

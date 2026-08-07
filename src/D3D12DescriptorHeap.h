@@ -18,8 +18,16 @@ public:
 	CPUDescriptorHandle GetCPUDescriptorHandleForHeapStart() const;
 	GPUDescriptorHandle GetGPUDescriptorHandleForHeapStart() const;
 	DescriptorHandle AllocateDescriptor();
+	// Allocates `count` guaranteed-contiguous descriptor slots (for an unbounded-array root
+	// binding), from a bump range separate from AllocateDescriptor's free list - never freed
+	// individually, meant for buffer arrays created once at startup.
+	uint32_t AllocateContiguousDescriptors(uint32_t count);
 	DescriptorHandle CreateSRV(D3D12Resource *resource, D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc);
 	DescriptorHandle CreateUAV(D3D12Resource *resource, D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc);
+	// Creates a view at an already-allocated index (e.g. from AllocateContiguousDescriptors)
+	// instead of allocating a fresh one from the free list.
+	void CreateSRVAt(uint32_t index, D3D12Resource *resource, D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc);
+	void CreateUAVAt(uint32_t index, D3D12Resource *resource, D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc);
 	DescriptorHandle CreateCBV(const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbvDesc);
 	DescriptorHandle CreateSampler(const D3D12_SAMPLER_DESC &samplerDesc);
 	// Creates an SRV for a TLAS. The resource pointer is null (valid only for AS descriptors).
@@ -61,4 +69,5 @@ private:
 	uint32_t numDescriptors_;
 	std::vector<uint32_t> resourceFreeList_;
 	std::vector<uint32_t> samplerFreeList_;
+	uint32_t contiguousBumpNext_ = 0; // grows downward from numDescriptors_, disjoint from resourceFreeList_
 };

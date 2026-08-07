@@ -1,15 +1,17 @@
 add_subdirectory(D3D12MemoryAllocator)
 add_subdirectory(imgui)
 
-add_library(D3D12 STATIC 
-D3D12Device.cpp 
-D3D12CommandQueue.cpp 
-D3D12Swapchain.cpp 
+add_library(D3D12 STATIC
+D3D12Device.cpp
+D3D12CommandQueue.cpp
+D3D12Swapchain.cpp
 D3D12CommandList.cpp
 D3D12Fence.cpp
 D3D12Pipeline.cpp
 D3D12RootSignatureBuilder.cpp
 D3D12DescriptorHeap.cpp
+D3D12ShaderTable.cpp
+D3D12AccelerationStructure.cpp
 DXCompiler.cpp
 D3D12ImguiRenderer.cpp
 HelperClasses/RenderTargetHelper.cpp

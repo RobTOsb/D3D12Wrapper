@@ -14,3 +14,5 @@
 #include "D3D12CommandList.h"
 #include "D3D12Exception.h"
 #include "D3D12ImguiRenderer.h"
+#include "D3D12ShaderTable.h"
+#include "D3D12AccelerationStructure.h"

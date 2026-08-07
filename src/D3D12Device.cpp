@@ -340,6 +340,92 @@ void D3D12Device::GetRaytracingAccelerationStructurePrebuildInfo(
 	device5->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &outInfo);
 }
 
+namespace
+{
+	uint32_t AlignUp(uint32_t value, uint32_t alignment)
+	{
+		return (value + alignment - 1) & ~(alignment - 1);
+	}
+
+	Microsoft::WRL::ComPtr<ID3D12CommandSignature> CreateIndirectCommandSignature(
+			ID3D12Device *device,
+			ID3D12RootSignature *rootSignature,
+			uint32_t rootConstantsSizeInBytes,
+			D3D12_INDIRECT_ARGUMENT_TYPE argumentType)
+	{
+		std::vector<D3D12_INDIRECT_ARGUMENT_DESC> arguments;
+
+		if (rootConstantsSizeInBytes > 0)
+		{
+			D3D12_INDIRECT_ARGUMENT_DESC constantsArg = {};
+			constantsArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+			constantsArg.Constant.RootParameterIndex = 0;
+			constantsArg.Constant.DestOffsetIn32BitValues = 0;
+			constantsArg.Constant.Num32BitValuesToSet = (rootConstantsSizeInBytes + 3) / 4;
+			arguments.push_back(constantsArg);
+		}
+
+		D3D12_INDIRECT_ARGUMENT_DESC dispatchArg = {};
+		dispatchArg.Type = argumentType;
+		arguments.push_back(dispatchArg);
+
+		uint32_t stride = 0;
+		switch (argumentType)
+		{
+			case D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH:
+				stride = sizeof(D3D12_DISPATCH_ARGUMENTS);
+				break;
+			case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
+				stride = sizeof(D3D12_DRAW_ARGUMENTS);
+				break;
+			case D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH:
+				stride = sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
+				break;
+			default:
+				throw D3D12Exception("Unsupported indirect argument type", E_INVALIDARG);
+		}
+		stride += rootConstantsSizeInBytes > 0 ? AlignUp(rootConstantsSizeInBytes, 4) : 0;
+
+		D3D12_COMMAND_SIGNATURE_DESC desc = {};
+		desc.ByteStride = stride;
+		desc.NumArgumentDescs = static_cast<UINT>(arguments.size());
+		desc.pArgumentDescs = arguments.data();
+
+		// A root signature is only required when the signature carries a root-argument entry
+		// (root constants/descriptors); a plain Dispatch/Draw/DispatchMesh argument doesn't need one.
+		ID3D12RootSignature *signatureForCreate = rootConstantsSizeInBytes > 0 ? rootSignature : nullptr;
+
+		Microsoft::WRL::ComPtr<ID3D12CommandSignature> commandSignature;
+		HRESULT hr = device->CreateCommandSignature(&desc, signatureForCreate, IID_PPV_ARGS(&commandSignature));
+		if (FAILED(hr))
+		{
+			throw D3D12Exception("Failed to create command signature", hr);
+		}
+		return commandSignature;
+	}
+} // namespace
+
+Microsoft::WRL::ComPtr<ID3D12CommandSignature> D3D12Device::CreateDispatchIndirectCommandSignature(
+		ID3D12RootSignature *rootSignature, uint32_t rootConstantsSizeInBytes)
+{
+	return CreateIndirectCommandSignature(
+			device_.Get(), rootSignature, rootConstantsSizeInBytes, D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH);
+}
+
+Microsoft::WRL::ComPtr<ID3D12CommandSignature> D3D12Device::CreateDrawIndirectCommandSignature(
+		ID3D12RootSignature *rootSignature, uint32_t rootConstantsSizeInBytes)
+{
+	return CreateIndirectCommandSignature(
+			device_.Get(), rootSignature, rootConstantsSizeInBytes, D3D12_INDIRECT_ARGUMENT_TYPE_DRAW);
+}
+
+Microsoft::WRL::ComPtr<ID3D12CommandSignature> D3D12Device::CreateDispatchMeshIndirectCommandSignature(
+		ID3D12RootSignature *rootSignature, uint32_t rootConstantsSizeInBytes)
+{
+	return CreateIndirectCommandSignature(
+			device_.Get(), rootSignature, rootConstantsSizeInBytes, D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH);
+}
+
 std::unique_ptr<D3D12Resource> D3D12Device::CreateAccelerationStructureBuffer(uint64_t size, bool isScratch)
 {
 	D3D12_RESOURCE_DESC1 desc = {};

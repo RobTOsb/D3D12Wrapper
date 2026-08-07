@@ -56,6 +56,23 @@ DescriptorHandle D3D12DescriptorHeap::AllocateDescriptor()
 	return DescriptorHandle{ index };
 }
 
+uint32_t D3D12DescriptorHeap::AllocateContiguousDescriptors(uint32_t count)
+{
+	// Bumps down from the top of the heap; AllocateDescriptor's free list is seeded low-to-high
+	// (pop from the back yields index 0 first), so the two allocators consume the heap from
+	// opposite ends and stay disjoint as long as neither exhausts the full range.
+	if (contiguousBumpNext_ == 0)
+	{
+		contiguousBumpNext_ = numDescriptors_;
+	}
+	if (count > contiguousBumpNext_)
+	{
+		throw std::runtime_error("No contiguous descriptor range available in the resource heap.");
+	}
+	contiguousBumpNext_ -= count;
+	return contiguousBumpNext_;
+}
+
 CPUDescriptorHandle D3D12DescriptorHeap::GetCPUDescriptorHandle(uint32_t index) const
 {
 	if (index >= numDescriptors_)
@@ -126,6 +143,18 @@ DescriptorHandle D3D12DescriptorHeap::CreateUAV(D3D12Resource *resource, D3D12_U
 	device_->CreateUnorderedAccessView(resource->GetResource(), nullptr, &uavDesc, destHandle);
 
 	return DescriptorHandle{ descriptorIndex };
+}
+
+void D3D12DescriptorHeap::CreateSRVAt(uint32_t index, D3D12Resource *resource, D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc)
+{
+	CPUDescriptorHandle destHandle = GetCPUDescriptorHandle(index);
+	device_->CreateShaderResourceView(resource->GetResource(), &srvDesc, destHandle);
+}
+
+void D3D12DescriptorHeap::CreateUAVAt(uint32_t index, D3D12Resource *resource, D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc)
+{
+	CPUDescriptorHandle destHandle = GetCPUDescriptorHandle(index);
+	device_->CreateUnorderedAccessView(resource->GetResource(), nullptr, &uavDesc, destHandle);
 }
 
 DescriptorHandle D3D12DescriptorHeap::CreateCBV(const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbvDesc)
