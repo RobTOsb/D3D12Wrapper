@@ -165,6 +165,8 @@ ShaderCompilationResult DXShaderCompiler::CompileShaderFromFile(const std::wstri
 
 	// Enable 16-bit types
 	compileArgs.push_back(L"-enable-16bit-types");
+	// Quiet the compiler for ray tracing types
+	compileArgs.push_back(L"-enable-payload-qualifiers");
 
 	// Debug info in debug builds
 #ifdef _DEBUG
