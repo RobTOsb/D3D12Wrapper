@@ -7,6 +7,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
 include(cmake/CPM.cmake)
+include(cmake/download_slang.cmake)
 
 cpmaddpackage(
     NAME DirectXTex
@@ -21,7 +22,18 @@ cpmaddpackage(
 )
 
 cpmaddpackage("gh:RobTOsb/fmtlog@2.2.3")
-cpmaddpackage("gh:Microsoft/mimalloc@3.1.4")
+cpmaddpackage(
+    NAME mimalloc
+    GITHUB_REPOSITORY Microsoft/mimalloc
+    VERSION 3.1.4
+    OPTIONS
+        "MI_BUILD_TESTS OFF"
+)
 cpmaddpackage("gh:Microsoft/DirectX-Headers@1.619.1")
 
 add_subdirectory("src")
+
+if(PROJECT_IS_TOP_LEVEL)
+    enable_testing()
+    add_subdirectory("test")
+endif()

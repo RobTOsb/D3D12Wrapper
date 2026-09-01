@@ -10,7 +10,7 @@
 #include "D3D12Buffer.h"
 #include "D3D12Texture.h"
 #include "D3D12Swapchain.h"
-#include "DXCompiler.h"
+#include "SlangCompiler.h"
 #include "D3D12CommandList.h"
 #include "D3D12Exception.h"
 #include "D3D12ImguiRenderer.h"

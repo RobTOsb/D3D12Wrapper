@@ -6,10 +6,6 @@
 
 #include "directx/d3d12sdklayers.h"
 
-#include <dxcapi.h>
-
-#include <d3d12shader.h>
-
 #include "D3D12MemAlloc.h"
 
 #include "backends/imgui_impl_win32.h"

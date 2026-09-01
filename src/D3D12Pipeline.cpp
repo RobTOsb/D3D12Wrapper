@@ -1,7 +1,7 @@
 #include "D3D12Pipeline.h"
 #include <vector>
 #include "D3D12Exception.h"
-#include "DXCompiler.h"
+#include "SlangCompiler.h"
 
 static D3D12_PRIMITIVE_TOPOLOGY_TYPE MapPrimitiveTopologyType(D3D12PrimitiveTopology topology)
 {
@@ -56,12 +56,12 @@ void D3D12GraphicsPipeline::BuildGraphicsPipeline(const GraphicsPipelineCreateIn
 		throw D3D12Exception("Vertex shader is required for a graphics pipeline", E_INVALIDARG);
 	}
 
-	psoDesc.VS = { vertexShader->blob->GetBufferPointer(), vertexShader->blob->GetBufferSize() };
+	psoDesc.VS = { vertexShader->bytecode.data(), vertexShader->bytecode.size() };
 
 	// Pixel shader (optional - depth-only passes have none)
 	if (const CompiledShader *pixelShader = compileResult.Find(ShaderStage::PIXEL))
 	{
-		psoDesc.PS = { pixelShader->blob->GetBufferPointer(), pixelShader->blob->GetBufferSize() };
+		psoDesc.PS = { pixelShader->bytecode.data(), pixelShader->bytecode.size() };
 	}
 
 	// Input layout for vertex shader
@@ -191,8 +191,8 @@ void D3D12GraphicsPipeline::BuildMeshShaderPipeline(const GraphicsPipelineCreate
 	// Amplification shader (optional)
 	if (const CompiledShader *amplificationShader = compileResult.Find(ShaderStage::AMPLIFICATION))
 	{
-		psoStream.AS = CD3DX12_SHADER_BYTECODE(amplificationShader->blob->GetBufferPointer(),
-											   amplificationShader->blob->GetBufferSize());
+		psoStream.AS =
+				CD3DX12_SHADER_BYTECODE(amplificationShader->bytecode.data(), amplificationShader->bytecode.size());
 	}
 
 	// Mesh shader (required)
@@ -201,13 +201,12 @@ void D3D12GraphicsPipeline::BuildMeshShaderPipeline(const GraphicsPipelineCreate
 	{
 		throw D3D12Exception("Mesh shader is required for mesh shader pipeline", E_INVALIDARG);
 	}
-	psoStream.MS = CD3DX12_SHADER_BYTECODE(meshShader->blob->GetBufferPointer(), meshShader->blob->GetBufferSize());
+	psoStream.MS = CD3DX12_SHADER_BYTECODE(meshShader->bytecode.data(), meshShader->bytecode.size());
 
 	// Pixel shader (optional but typically present)
 	if (const CompiledShader *pixelShader = compileResult.Find(ShaderStage::PIXEL))
 	{
-		psoStream.PS = CD3DX12_SHADER_BYTECODE(pixelShader->blob->GetBufferPointer(),
-											   pixelShader->blob->GetBufferSize());
+		psoStream.PS = CD3DX12_SHADER_BYTECODE(pixelShader->bytecode.data(), pixelShader->bytecode.size());
 	}
 
 	// Blend state
@@ -331,7 +330,7 @@ void D3D12ComputePipeline::BuildComputePipeline(const ShaderCompilationResult &c
 	// Create compute pipeline state
 	D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
 	psoDesc.pRootSignature = rootSignature_.Get();
-	psoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader->blob->GetBufferPointer(), computeShader->blob->GetBufferSize());
+	psoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader->bytecode.data(), computeShader->bytecode.size());
 	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
 	HRESULT hr = device_->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState_));
@@ -341,13 +340,15 @@ void D3D12ComputePipeline::BuildComputePipeline(const ShaderCompilationResult &c
 	}
 }
 
-D3D12RaytracingPipeline &D3D12RaytracingPipeline::BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult)
+D3D12RaytracingPipeline &D3D12RaytracingPipeline::BuildRootSignatureFromShader(
+		const ShaderCompilationResult &compileResult)
 {
 	rootSignature_ = CreateRootSignatureForShader(device_.Get(), compileResult, true, reflectedRootSignature_);
 	return *this;
 }
 
-D3D12RaytracingPipeline &D3D12RaytracingPipeline::SetGlobalRootSignature(Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature)
+D3D12RaytracingPipeline &D3D12RaytracingPipeline::SetGlobalRootSignature(
+		Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature)
 {
 	if (!rootSignature)
 	{
@@ -387,7 +388,7 @@ void D3D12RaytracingPipeline::BuildRaytracingPipeline(const RaytracingPipelineCr
 
 	// DXIL library + exports
 	auto lib = raytracingPipelineDesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-	CD3DX12_SHADER_BYTECODE libraryBytecode(library->blob->GetBufferPointer(), library->blob->GetBufferSize());
+	CD3DX12_SHADER_BYTECODE libraryBytecode(library->bytecode.data(), library->bytecode.size());
 	lib->SetDXILLibrary(&libraryBytecode);
 	for (const auto &exportName: pipelineInfo.exports)
 	{

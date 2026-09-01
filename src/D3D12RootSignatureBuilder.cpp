@@ -3,24 +3,16 @@
 #include <algorithm>
 
 #include "D3D12Exception.h"
-#include "DXCompiler.h"
+#include "SlangCompiler.h"
 #include "fmtlog.h"
-
-// Present in recent Windows SDKs; defined here so the build does not depend on the SDK version.
-#ifndef D3D_SHADER_REQUIRES_RESOURCE_DESCRIPTOR_HEAP_INDEXING
-#define D3D_SHADER_REQUIRES_RESOURCE_DESCRIPTOR_HEAP_INDEXING 0x02000000
-#endif
-#ifndef D3D_SHADER_REQUIRES_SAMPLER_DESCRIPTOR_HEAP_INDEXING
-#define D3D_SHADER_REQUIRES_SAMPLER_DESCRIPTOR_HEAP_INDEXING 0x04000000
-#endif
 
 namespace
 {
-	// A resource binding gathered from reflection, before it has been assigned a root slot.
 	struct ReflectedBinding
 	{
 		D3D12_DESCRIPTOR_RANGE_TYPE rangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		D3D_SHADER_INPUT_TYPE inputType = D3D_SIT_TEXTURE;
+		bool isBuffer = false; // structured / byte-address / raw buffer
+		bool isAccelStruct = false;
 		uint32_t registerSpace = 0;
 		uint32_t baseShaderRegister = 0;
 		uint32_t bindCount = 1; // 0 means unbounded
@@ -42,24 +34,17 @@ namespace
 		}
 	}
 
-	D3D12_DESCRIPTOR_RANGE_TYPE RangeTypeFromInputType(D3D_SHADER_INPUT_TYPE type)
+	D3D12_DESCRIPTOR_RANGE_TYPE RangeTypeFromResourceKind(ShaderResourceKind kind)
 	{
-		switch (type)
+		switch (kind)
 		{
-			case D3D_SIT_CBUFFER:
+			case ShaderResourceKind::CBV:
 				return D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-			case D3D_SIT_SAMPLER:
-				return D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-			case D3D_SIT_UAV_RWTYPED:
-			case D3D_SIT_UAV_RWSTRUCTURED:
-			case D3D_SIT_UAV_RWBYTEADDRESS:
-			case D3D_SIT_UAV_APPEND_STRUCTURED:
-			case D3D_SIT_UAV_CONSUME_STRUCTURED:
-			case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-			case D3D_SIT_UAV_FEEDBACKTEXTURE:
+			case ShaderResourceKind::UAV:
 				return D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+			case ShaderResourceKind::SAMPLER:
+				return D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
 			default:
-				// TBUFFER, TEXTURE, STRUCTURED, BYTEADDRESS, RTACCELERATIONSTRUCTURE
 				return D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		}
 	}
@@ -71,44 +56,41 @@ namespace
 			return false;
 		}
 
-		switch (binding.inputType)
+		if (binding.rangeType == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
 		{
-			case D3D_SIT_CBUFFER:
-			case D3D_SIT_STRUCTURED:
-			case D3D_SIT_BYTEADDRESS:
-			case D3D_SIT_RTACCELERATIONSTRUCTURE:
-			case D3D_SIT_UAV_RWSTRUCTURED:
-			case D3D_SIT_UAV_RWBYTEADDRESS:
-				return true;
-			default:
-				return false;
+			return true;
 		}
+
+		if (binding.rangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+		{
+			return false;
+		}
+		return binding.isBuffer || binding.isAccelStruct;
 	}
 
-	void AddBinding(std::vector<ReflectedBinding> &bindings, const D3D12_SHADER_INPUT_BIND_DESC &desc)
+	void AddBinding(std::vector<ReflectedBinding> &bindings, const ReflectedResource &resource)
 	{
-		// A DXIL library only assigns registers to resources that were declared with an explicit
-		// register(); everything else is reported as unallocated and cannot be placed in a root
-		// signature, because the register it will eventually get is not knowable here.
-		if (desc.BindPoint == UINT_MAX || desc.Space == UINT_MAX)
+		// A resource whose register the compiler could not resolve (no explicit register() on
+		// a library export, for instance) cannot be placed in a root signature.
+		if (resource.baseShaderRegister == UINT_MAX || resource.registerSpace == UINT_MAX)
 		{
 			logw("Resource '{}' has no assigned register and was left out of the generated root "
 				 "signature; declare it with an explicit register() binding",
-				 desc.Name ? desc.Name : "<unnamed>");
+				 resource.name.empty() ? "<unnamed>" : resource.name.c_str());
 			return;
 		}
 
-		const D3D12_DESCRIPTOR_RANGE_TYPE rangeType = RangeTypeFromInputType(desc.Type);
+		const D3D12_DESCRIPTOR_RANGE_TYPE rangeType = RangeTypeFromResourceKind(resource.kind);
 
 		// The same resource shows up once per stage that uses it; keep the widest binding.
 		for (auto &existing: bindings)
 		{
-			if (existing.rangeType == rangeType && existing.registerSpace == desc.Space &&
-				existing.baseShaderRegister == desc.BindPoint)
+			if (existing.rangeType == rangeType && existing.registerSpace == resource.registerSpace &&
+				existing.baseShaderRegister == resource.baseShaderRegister)
 			{
-				if (existing.bindCount != 0 && (desc.BindCount == 0 || desc.BindCount > existing.bindCount))
+				if (existing.bindCount != 0 && (resource.bindCount == 0 || resource.bindCount > existing.bindCount))
 				{
-					existing.bindCount = desc.BindCount;
+					existing.bindCount = resource.bindCount;
 				}
 				return;
 			}
@@ -116,11 +98,12 @@ namespace
 
 		ReflectedBinding binding;
 		binding.rangeType = rangeType;
-		binding.inputType = desc.Type;
-		binding.registerSpace = desc.Space;
-		binding.baseShaderRegister = desc.BindPoint;
-		binding.bindCount = desc.BindCount;
-		binding.name = desc.Name ? desc.Name : "";
+		binding.isBuffer = resource.isBuffer;
+		binding.isAccelStruct = resource.isAccelerationStructure;
+		binding.registerSpace = resource.registerSpace;
+		binding.baseShaderRegister = resource.baseShaderRegister;
+		binding.bindCount = resource.bindCount;
+		binding.name = resource.name;
 		bindings.push_back(std::move(binding));
 	}
 
@@ -132,84 +115,35 @@ namespace
 			return 0;
 		}
 
-		D3D12_SHADER_BUFFER_DESC bufferDesc = {};
-
-		if (shader.shaderReflection)
+		for (const auto &cbuffer: shader.reflection.constantBuffers)
 		{
-			auto *constantBuffer = shader.shaderReflection->GetConstantBufferByName(name);
-			if (constantBuffer && SUCCEEDED(constantBuffer->GetDesc(&bufferDesc)))
+			if (cbuffer.name == name)
 			{
-				return bufferDesc.Size;
+				return cbuffer.byteSize;
 			}
 		}
-		else if (shader.libraryReflection)
-		{
-			D3D12_LIBRARY_DESC libraryDesc = {};
-			if (FAILED(shader.libraryReflection->GetDesc(&libraryDesc)))
-			{
-				return 0;
-			}
-
-			for (UINT i = 0; i < libraryDesc.FunctionCount; ++i)
-			{
-				auto *function = shader.libraryReflection->GetFunctionByIndex(static_cast<INT>(i));
-				if (!function)
-				{
-					continue;
-				}
-
-				auto *constantBuffer = function->GetConstantBufferByName(name);
-				if (constantBuffer && SUCCEEDED(constantBuffer->GetDesc(&bufferDesc)))
-				{
-					return bufferDesc.Size;
-				}
-			}
-		}
-
 		return 0;
 	}
 
-	// Records every variable inside the given cbuffer (its name, byte offset/size, and which cbuffer
-	// it lives in) so a single variable can later be updated by name without knowing which cbuffer
-	// DXC packed it into - primarily for loose top-level globals DXC packs into $Globals.
-	void AddScalarsFromConstantBuffer(ID3D12ShaderReflectionConstantBuffer *constantBuffer,
-									  std::vector<ReflectedScalar> &outScalars)
+	void AddScalarsFromConstantBuffer(const ReflectedConstantBuffer &cbuffer, std::vector<ReflectedScalar> &outScalars)
 	{
-		D3D12_SHADER_BUFFER_DESC bufferDesc = {};
-		if (!constantBuffer || FAILED(constantBuffer->GetDesc(&bufferDesc)))
+		for (const auto &variable: cbuffer.variables)
 		{
-			return;
-		}
-
-		for (UINT i = 0; i < bufferDesc.Variables; ++i)
-		{
-			auto *variable = constantBuffer->GetVariableByIndex(i);
-			if (!variable)
-			{
-				continue;
-			}
-
-			D3D12_SHADER_VARIABLE_DESC variableDesc = {};
-			if (FAILED(variable->GetDesc(&variableDesc)) || !variableDesc.Name)
-			{
-				continue;
-			}
-
 			const bool alreadyKnown =
 					std::any_of(outScalars.begin(),
-							   outScalars.end(),
-							   [&](const ReflectedScalar &scalar) { return scalar.name == variableDesc.Name; });
+								outScalars.end(),
+								[&](const ReflectedScalar &scalar) { return scalar.name == variable.name; });
 			if (alreadyKnown)
 			{
 				continue;
 			}
 
 			ReflectedScalar scalar;
-			scalar.name = variableDesc.Name;
-			scalar.cbufferName = bufferDesc.Name ? bufferDesc.Name : "";
-			scalar.byteOffset = variableDesc.StartOffset;
-			scalar.byteSize = variableDesc.Size;
-			scalar.cbufferByteSize = bufferDesc.Size;
+			scalar.name = variable.name;
+			scalar.cbufferName = cbuffer.name;
+			scalar.byteOffset = variable.byteOffset;
+			scalar.byteSize = variable.byteSize;
+			scalar.cbufferByteSize = cbuffer.byteSize;
 			outScalars.push_back(std::move(scalar));
 		}
 	}
@@ -219,46 +153,9 @@ namespace
 	{
 		for (const auto &shader: compileResult.shaders)
 		{
-			if (shader.shaderReflection)
+			for (const auto &cbuffer: shader.reflection.constantBuffers)
 			{
-				D3D12_SHADER_DESC shaderDesc = {};
-				if (FAILED(shader.shaderReflection->GetDesc(&shaderDesc)))
-				{
-					continue;
-				}
-
-				for (UINT i = 0; i < shaderDesc.ConstantBuffers; ++i)
-				{
-					AddScalarsFromConstantBuffer(shader.shaderReflection->GetConstantBufferByIndex(i), outScalars);
-				}
-			}
-			else if (shader.libraryReflection)
-			{
-				D3D12_LIBRARY_DESC libraryDesc = {};
-				if (FAILED(shader.libraryReflection->GetDesc(&libraryDesc)))
-				{
-					continue;
-				}
-
-				for (UINT f = 0; f < libraryDesc.FunctionCount; ++f)
-				{
-					auto *function = shader.libraryReflection->GetFunctionByIndex(static_cast<INT>(f));
-					if (!function)
-					{
-						continue;
-					}
-
-					D3D12_FUNCTION_DESC functionDesc = {};
-					if (FAILED(function->GetDesc(&functionDesc)))
-					{
-						continue;
-					}
-
-					for (UINT i = 0; i < functionDesc.ConstantBuffers; ++i)
-					{
-						AddScalarsFromConstantBuffer(function->GetConstantBufferByIndex(i), outScalars);
-					}
-				}
+				AddScalarsFromConstantBuffer(cbuffer, outScalars);
 			}
 		}
 	}
@@ -266,84 +163,36 @@ namespace
 	// Walks every compiled stage and unions the resources they bind.
 	void CollectBindings(const ShaderCompilationResult &compileResult,
 						 std::vector<ReflectedBinding> &outBindings,
-						 uint64_t &outRequiresFlags)
+						 bool &outUsesResourceHeapIndexing,
+						 bool &outUsesSamplerHeapIndexing)
 	{
-		outRequiresFlags = 0;
+		outUsesResourceHeapIndexing = false;
+		outUsesSamplerHeapIndexing = false;
 
 		for (const auto &shader: compileResult.shaders)
 		{
-			if (shader.shaderReflection)
+			outUsesResourceHeapIndexing |= shader.reflection.usesResourceDescriptorHeapIndexing;
+			outUsesSamplerHeapIndexing |= shader.reflection.usesSamplerDescriptorHeapIndexing;
+
+			for (const auto &resource: shader.reflection.resources)
 			{
-				D3D12_SHADER_DESC shaderDesc = {};
-				if (FAILED(shader.shaderReflection->GetDesc(&shaderDesc)))
+				// Slang reports which locations the compiled entry point actually references;
+				// unused ones are dropped exactly as DXC pruned them implicitly.
+				if (!resource.used)
 				{
-					logw("Reflection unavailable for {} shader '{}'",
-						 ShaderStageToString(shader.stage),
-						 shader.entryPoint.c_str());
 					continue;
 				}
-
-				outRequiresFlags |= shader.shaderReflection->GetRequiresFlags();
-
-				for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
-				{
-					D3D12_SHADER_INPUT_BIND_DESC bindDesc = {};
-					if (SUCCEEDED(shader.shaderReflection->GetResourceBindingDesc(i, &bindDesc)))
-					{
-						AddBinding(outBindings, bindDesc);
-					}
-				}
-			}
-			else if (shader.libraryReflection)
-			{
-				D3D12_LIBRARY_DESC libraryDesc = {};
-				if (FAILED(shader.libraryReflection->GetDesc(&libraryDesc)))
-				{
-					logw("Library reflection unavailable for '{}'", shader.entryPoint.c_str());
-					continue;
-				}
-
-				for (UINT f = 0; f < libraryDesc.FunctionCount; ++f)
-				{
-					auto *function = shader.libraryReflection->GetFunctionByIndex(static_cast<INT>(f));
-					if (!function)
-					{
-						continue;
-					}
-
-					D3D12_FUNCTION_DESC functionDesc = {};
-					if (FAILED(function->GetDesc(&functionDesc)))
-					{
-						continue;
-					}
-
-					outRequiresFlags |= functionDesc.RequiredFeatureFlags;
-
-					for (UINT i = 0; i < functionDesc.BoundResources; ++i)
-					{
-						D3D12_SHADER_INPUT_BIND_DESC bindDesc = {};
-						if (SUCCEEDED(function->GetResourceBindingDesc(i, &bindDesc)))
-						{
-							AddBinding(outBindings, bindDesc);
-						}
-					}
-				}
-			}
-			else
-			{
-				logw("No reflection data for {} shader '{}'; its bindings will be missing from the "
-					 "generated root signature",
-					 ShaderStageToString(shader.stage),
-					 shader.entryPoint.c_str());
+				AddBinding(outBindings, resource);
 			}
 		}
 	}
 
-	D3D12_STATIC_SAMPLER_DESC MakeStaticSampler(uint32_t shaderRegister,
-												D3D12_FILTER filter,
-												D3D12_TEXTURE_ADDRESS_MODE addressMode,
-												D3D12_STATIC_BORDER_COLOR borderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
-												D3D12_COMPARISON_FUNC comparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL)
+	D3D12_STATIC_SAMPLER_DESC MakeStaticSampler(
+			uint32_t shaderRegister,
+			D3D12_FILTER filter,
+			D3D12_TEXTURE_ADDRESS_MODE addressMode,
+			D3D12_STATIC_BORDER_COLOR borderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+			D3D12_COMPARISON_FUNC comparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL)
 	{
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = filter;
@@ -437,9 +286,13 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 	}
 
 	std::vector<ReflectedBinding> bindings;
-	uint64_t requiresFlags = 0;
-	CollectBindings(compileResult, bindings, requiresFlags);
-	logd("Reflected root signature: {} binding(s), DXIL feature flags 0x{:x}", bindings.size(), requiresFlags);
+	bool usesResourceHeapIndexing = false;
+	bool usesSamplerHeapIndexing = false;
+	CollectBindings(compileResult, bindings, usesResourceHeapIndexing, usesSamplerHeapIndexing);
+	logd("Reflected root signature: {} binding(s), bindless resource heap: {}, bindless sampler heap: {}",
+		 bindings.size(),
+		 usesResourceHeapIndexing,
+		 usesSamplerHeapIndexing);
 	for (const auto &binding: bindings)
 	{
 		logd("  {} '{}' register {}, space {}, count {}",
@@ -453,11 +306,6 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 	ReflectedRootSignature result;
 	CollectScalars(compileResult, result.scalars);
 
-	// Find the push-constants buffer purely by name, wherever DXC happened to put it - no register
-	// is reserved up front. A shader is free to leave b0/space0 unused, or put an ordinary CBV there;
-	// only a CBV actually named g_PushConstants/pushConstants becomes the root-constants parameter.
-	// If no entry point in this pipeline references it, it simply won't be in the reflected bindings
-	// and this pipeline gets no root-constants parameter at all.
 	bool hasRootConstants = false;
 	uint32_t rootConstantCount = 0;
 	uint32_t rootConstantsRegister = 0;
@@ -481,7 +329,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		}
 
 		const uint32_t requiredDwords = (sizeInBytes + 3) / 4;
-		rootConstantCount = (std::min)((std::max)(kMinRootConstantCount, requiredDwords), kMaxRootConstantCount);
+		rootConstantCount = (std::min) ((std::max) (kMinRootConstantCount, requiredDwords), kMaxRootConstantCount);
 		hasRootConstants = true;
 		rootConstantsRegister = it->baseShaderRegister;
 		rootConstantsSpace = it->registerSpace;
@@ -523,9 +371,6 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		parameters.push_back(rootConstants);
 	}
 
-	// Every table binding gets its own single-range table, so that binding one resource by name sets
-	// only that register - a shared multi-range table would make each bind reposition every register
-	// in it, since ranges resolve as consecutive descriptors from the table's base handle.
 	std::vector<std::vector<D3D12_DESCRIPTOR_RANGE1>> tables; // one range each
 	std::vector<size_t> tableBindingIndices;
 
@@ -586,8 +431,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 			range.NumDescriptors = binding.bindCount == 0 ? UINT_MAX : binding.bindCount;
 			range.BaseShaderRegister = binding.baseShaderRegister;
 			range.RegisterSpace = binding.registerSpace;
-			range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
-						  D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
+			range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE | D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
 			// Sole range in its table, so it starts at the base handle the binder sets.
 			range.OffsetInDescriptorsFromTableStart = 0;
 
@@ -616,9 +460,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 	const uint32_t costInDwords = RootSignatureCostInDwords(parameters);
 	if (costInDwords > D3D12_MAX_ROOT_COST)
 	{
-		logw("Reflected root signature needs {} DWORDs, over the {} DWORD limit",
-			 costInDwords,
-			 D3D12_MAX_ROOT_COST);
+		logw("Reflected root signature needs {} DWORDs, over the {} DWORD limit", costInDwords, D3D12_MAX_ROOT_COST);
 		throw D3D12Exception("Reflected root signature exceeds the 64 DWORD root cost limit", E_INVALIDARG);
 	}
 
@@ -673,20 +515,6 @@ Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRootSignatureForShader(ID3D12D
 																		 ReflectedRootSignature &outReflected)
 {
 	outReflected = {};
-
-	if (compileResult.rootSignatureBlob && compileResult.rootSignatureBlob->GetBufferSize() > 0)
-	{
-		Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
-		HRESULT hr = device->CreateRootSignature(0,
-												 compileResult.rootSignatureBlob->GetBufferPointer(),
-												 compileResult.rootSignatureBlob->GetBufferSize(),
-												 IID_PPV_ARGS(&rootSignature));
-		if (FAILED(hr))
-		{
-			throw D3D12Exception("Failed to create root signature from shader", hr);
-		}
-		return rootSignature;
-	}
 
 	outReflected = BuildRootSignatureFromReflection(device, compileResult, forRaytracing);
 	return outReflected.rootSignature;
