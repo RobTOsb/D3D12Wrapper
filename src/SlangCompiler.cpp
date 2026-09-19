@@ -330,8 +330,6 @@ namespace
 		out.resources.push_back(std::move(resource));
 	}
 
-	// Walks one top-level shader parameter. For DXIL targets Slang lowers each global
-	// resource/cbuffer/sampler to its own parameter with a concrete register and space.
 	void WalkParameter(slang::VariableLayoutReflection *param, ShaderReflectionData &out)
 	{
 		if (!param)
@@ -351,9 +349,6 @@ namespace
 		slang::TypeLayoutReflection *leaf = typeLayout->unwrapArray();
 		const slang::TypeReflection::Kind kind = leaf ? leaf->getKind() : slang::TypeReflection::Kind::None;
 
-		// ParameterBlock<T> assigns its own register space and packs resources relative to it;
-		// the reflected-root-signature builder has no model for that. Shaders targeting this
-		// wrapper should use flat register() bindings.
 		if (kind == slang::TypeReflection::Kind::ParameterBlock)
 		{
 			logw("Shader parameter '{}' is a ParameterBlock, which the generated root signature does "
@@ -362,9 +357,6 @@ namespace
 			return;
 		}
 
-		// A constant buffer (named ConstantBuffer<T>, cbuffer {}, or the implicit buffer Slang
-		// packs loose top-level uniforms into). Slang gives this a "constantBuffer" binding
-		// with a concrete register index.
 		if (kind == slang::TypeReflection::Kind::ConstantBuffer)
 		{
 			const std::string cbufferName = name.empty() ? std::string("$Globals") : name;
@@ -388,8 +380,6 @@ namespace
 			return;
 		}
 
-		// Loose top-level uniforms with no enclosing buffer (rare on D3D targets, but Slang
-		// can expose them directly as a "uniform" parameter).
 		const slang::ParameterCategory category = param->getCategory();
 		if (category == slang::ParameterCategory::Uniform)
 		{
@@ -465,8 +455,6 @@ namespace
 		}
 	}
 
-	// After code generation, ask Slang which reflected locations the compiled shader actually
-	// references. DXC pruned unused resources implicitly; this restores that behavior.
 	void ApplyUsedFilter(slang::IMetadata *metadata, ShaderReflectionData &out)
 	{
 		if (!metadata)
@@ -495,8 +483,6 @@ struct SlangShaderCompiler::Impl
 {
 	ComPtr<slang::IGlobalSession> globalSession;
 
-	// Builds the shared compiler-option list for one compile invocation. `storage` keeps the
-	// backing strings alive for the lifetime of the returned entries (deque => stable c_str()).
 	std::vector<slang::CompilerOptionEntry> BuildOptions(const std::vector<std::wstring> &arguments,
 														 std::deque<std::string> &storage) const
 	{
@@ -532,9 +518,11 @@ struct SlangShaderCompiler::Impl
 #ifdef _DEBUG
 		pushInt(slang::CompilerOptionName::Optimization, SLANG_OPTIMIZATION_LEVEL_NONE);
 		pushInt(slang::CompilerOptionName::DebugInformation, SLANG_DEBUG_INFO_LEVEL_MAXIMAL);
+		pushInt(slang::CompilerOptionName::DebugInformationFormat, SLANG_DEBUG_INFO_FORMAT_C7);
 #else
 		pushInt(slang::CompilerOptionName::Optimization, SLANG_OPTIMIZATION_LEVEL_HIGH);
-		pushInt(slang::CompilerOptionName::DebugInformation, SLANG_DEBUG_INFO_LEVEL_NONE);
+		pushInt(slang::CompilerOptionName::DebugInformation, SLANG_DEBUG_INFO_LEVEL_STANDARD);
+		pushInt(slang::CompilerOptionName::DebugInformationFormat, SLANG_DEBUG_INFO_FORMAT_C7);
 #endif
 
 		for (const auto &arg: arguments)
@@ -546,8 +534,6 @@ struct SlangShaderCompiler::Impl
 			const std::string narrow = Narrow(arg);
 			if (narrow.front() == '-' || narrow.front() == '/')
 			{
-				// Legacy DXC flags that have no Slang equivalent (16-bit types are implicit at
-				// sm_6_6, root signatures are always reflected, RT payloads are native).
 				if (narrow.rfind("-enable-16bit-types", 0) == 0 || narrow.rfind("-HV", 0) == 0 ||
 					narrow.rfind("-enable-payload-qualifiers", 0) == 0 || narrow.rfind("-rootsig-define", 0) == 0 ||
 					narrow.rfind("-Qembed_debug", 0) == 0 || narrow.rfind("-Zi", 0) == 0)
@@ -559,7 +545,6 @@ struct SlangShaderCompiler::Impl
 				continue;
 			}
 
-			// Bare token => a preprocessor define, optionally NAME=VALUE.
 			const size_t eq = narrow.find('=');
 			if (eq == std::string::npos)
 			{
@@ -634,7 +619,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		moduleName = moduleName.substr(0, dot);
 	}
 
-	// A "library" target is a whole-program compile of every entry point into one DXIL blob.
 	bool anyLibrary = false;
 	for (const auto &entry: entryPoints)
 	{
@@ -676,7 +660,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		return result;
 	}
 
-	// The module is owned by the session and stays valid for as long as the session does.
 	ComPtr<slang::IBlob> moduleDiagnostics;
 	slang::IModule *module = nullptr;
 	{
@@ -693,9 +676,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		return result;
 	}
 
-	// Resolve each requested entry point and build the component list (module first). The
-	// ComPtr elements take their own reference; the underlying objects outlive the session
-	// only if something keeps them alive, which nothing here does past this function.
 	std::vector<ComPtr<slang::IComponentType>> components;
 	components.emplace_back(module);
 
@@ -705,6 +685,12 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 	{
 		const ParsedTargetProfile parsed = ParseTargetProfile(entry.targetProfile);
 		std::string entryName = Narrow(entry.entryPoint);
+
+		if (parsed.isLibrary && entryName.empty())
+		{
+			continue;
+		}
+
 		if (entryName.empty())
 		{
 			entryName = "main";
@@ -722,7 +708,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		}
 		else
 		{
-			// Library / raytracing: the stage comes from the [shader("...")] attribute.
 			hr = module->findEntryPointByName(entryName.c_str(), entryPointComponent.writeRef());
 		}
 		LogDiagnostics(entryDiag);
@@ -812,8 +797,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		return result;
 	}
 
-	// One CompiledShader per entry point. Entry point i sits at component index i+1, so its
-	// index within the linked program is i.
 	for (size_t i = 0; i < entryNames.size(); ++i)
 	{
 		ComPtr<slang::IBlob> codeDiag;
