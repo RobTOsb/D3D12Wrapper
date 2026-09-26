@@ -1,17 +1,16 @@
 #include "D3D12ImguiRenderer.h"
 
-#include "D3D12Device.h"
-#include "D3D12DescriptorHeap.h"
-#include "D3D12CommandQueue.h"
 #include "D3D12CommandList.h"
+#include "D3D12CommandQueue.h"
+#include "D3D12DescriptorHeap.h"
+#include "D3D12Device.h"
 
 D3D12ImguiRenderer::D3D12ImguiRenderer(D3D12Device *device,
-									DXGI_FORMAT rtvFormat,
-										D3D12CommandQueue *commandQueue,
-										D3D12DescriptorHeap *globalDescriptorHeap,
-										void *hwnd,
-										uint32_t frameCount) :
-	descriptorHeap_(globalDescriptorHeap)
+									   DXGI_FORMAT rtvFormat,
+									   D3D12CommandQueue *commandQueue,
+									   D3D12DescriptorHeap *globalDescriptorHeap,
+									   void *hwnd,
+									   uint32_t frameCount) : descriptorHeap_(globalDescriptorHeap)
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -39,7 +38,7 @@ D3D12ImguiRenderer::D3D12ImguiRenderer(D3D12Device *device,
 	initInfo.LegacySingleSrvGpuDescriptor = gpuHandle;
 	ImGui_ImplDX12_Init(&initInfo);
 
-    ImGui::Spectrum::LoadFont();
+	ImGui::Spectrum::LoadFont();
 }
 
 D3D12ImguiRenderer::~D3D12ImguiRenderer()

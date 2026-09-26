@@ -102,19 +102,19 @@ public:
 						   uint32_t numRects = 0,
 						   const D3D12Rect *rects = nullptr);
 	void ClearUnorderedAccessViewFloat(const D3D12DescriptorHeap *gpuDescriptorHeap,
-								   DescriptorHandle gpuUavHandle,
-								   const D3D12DescriptorHeap *cpuDescriptorHeap,
-								   DescriptorHandle cpuUavHandle,
-								   D3D12Resource *uavResource,
-								   const float values[4]);
+									   DescriptorHandle gpuUavHandle,
+									   const D3D12DescriptorHeap *cpuDescriptorHeap,
+									   DescriptorHandle cpuUavHandle,
+									   D3D12Resource *uavResource,
+									   const float values[4]);
 
 	void ClearUnorderedAccessViewUint(const D3D12DescriptorHeap *gpuDescriptorHeap,
-								  DescriptorHandle gpuUavHandle,
-								  const D3D12DescriptorHeap *cpuDescriptorHeap,
-								  DescriptorHandle cpuUavHandle,
-								  D3D12Resource *uavResource,
-								  const uint32_t values[4]);
-								  
+									  DescriptorHandle gpuUavHandle,
+									  const D3D12DescriptorHeap *cpuDescriptorHeap,
+									  DescriptorHandle cpuUavHandle,
+									  D3D12Resource *uavResource,
+									  const uint32_t values[4]);
+
 	void SetGraphicsPipeline(D3D12GraphicsPipeline *pipeline);
 	void SetComputePipeline(D3D12ComputePipeline *pipeline);
 	void SetRaytracingPipeline(D3D12RaytracingPipeline *pipeline);

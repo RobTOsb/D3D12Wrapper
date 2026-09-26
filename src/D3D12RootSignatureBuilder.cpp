@@ -197,8 +197,8 @@ namespace
 
 			const bool alreadyKnown =
 					std::any_of(outScalars.begin(),
-							   outScalars.end(),
-							   [&](const ReflectedScalar &scalar) { return scalar.name == variableDesc.Name; });
+								outScalars.end(),
+								[&](const ReflectedScalar &scalar) { return scalar.name == variableDesc.Name; });
 			if (alreadyKnown)
 			{
 				continue;
@@ -339,11 +339,12 @@ namespace
 		}
 	}
 
-	D3D12_STATIC_SAMPLER_DESC MakeStaticSampler(uint32_t shaderRegister,
-												D3D12_FILTER filter,
-												D3D12_TEXTURE_ADDRESS_MODE addressMode,
-												D3D12_STATIC_BORDER_COLOR borderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
-												D3D12_COMPARISON_FUNC comparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL)
+	D3D12_STATIC_SAMPLER_DESC MakeStaticSampler(
+			uint32_t shaderRegister,
+			D3D12_FILTER filter,
+			D3D12_TEXTURE_ADDRESS_MODE addressMode,
+			D3D12_STATIC_BORDER_COLOR borderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+			D3D12_COMPARISON_FUNC comparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL)
 	{
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = filter;
@@ -453,11 +454,6 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 	ReflectedRootSignature result;
 	CollectScalars(compileResult, result.scalars);
 
-	// Find the push-constants buffer purely by name, wherever DXC happened to put it - no register
-	// is reserved up front. A shader is free to leave b0/space0 unused, or put an ordinary CBV there;
-	// only a CBV actually named g_PushConstants/pushConstants becomes the root-constants parameter.
-	// If no entry point in this pipeline references it, it simply won't be in the reflected bindings
-	// and this pipeline gets no root-constants parameter at all.
 	bool hasRootConstants = false;
 	uint32_t rootConstantCount = 0;
 	uint32_t rootConstantsRegister = 0;
@@ -481,7 +477,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		}
 
 		const uint32_t requiredDwords = (sizeInBytes + 3) / 4;
-		rootConstantCount = (std::min)((std::max)(kMinRootConstantCount, requiredDwords), kMaxRootConstantCount);
+		rootConstantCount = (std::min) ((std::max) (kMinRootConstantCount, requiredDwords), kMaxRootConstantCount);
 		hasRootConstants = true;
 		rootConstantsRegister = it->baseShaderRegister;
 		rootConstantsSpace = it->registerSpace;
@@ -523,9 +519,6 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		parameters.push_back(rootConstants);
 	}
 
-	// Every table binding gets its own single-range table, so that binding one resource by name sets
-	// only that register - a shared multi-range table would make each bind reposition every register
-	// in it, since ranges resolve as consecutive descriptors from the table's base handle.
 	std::vector<std::vector<D3D12_DESCRIPTOR_RANGE1>> tables; // one range each
 	std::vector<size_t> tableBindingIndices;
 
@@ -586,8 +579,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 			range.NumDescriptors = binding.bindCount == 0 ? UINT_MAX : binding.bindCount;
 			range.BaseShaderRegister = binding.baseShaderRegister;
 			range.RegisterSpace = binding.registerSpace;
-			range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
-						  D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
+			range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE | D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
 			// Sole range in its table, so it starts at the base handle the binder sets.
 			range.OffsetInDescriptorsFromTableStart = 0;
 
@@ -616,9 +608,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 	const uint32_t costInDwords = RootSignatureCostInDwords(parameters);
 	if (costInDwords > D3D12_MAX_ROOT_COST)
 	{
-		logw("Reflected root signature needs {} DWORDs, over the {} DWORD limit",
-			 costInDwords,
-			 D3D12_MAX_ROOT_COST);
+		logw("Reflected root signature needs {} DWORDs, over the {} DWORD limit", costInDwords, D3D12_MAX_ROOT_COST);
 		throw D3D12Exception("Reflected root signature exceeds the 64 DWORD root cost limit", E_INVALIDARG);
 	}
 
