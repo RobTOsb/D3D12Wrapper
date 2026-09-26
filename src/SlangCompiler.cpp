@@ -330,8 +330,6 @@ namespace
 		out.resources.push_back(std::move(resource));
 	}
 
-	// Walks one top-level shader parameter. For DXIL targets Slang lowers each global
-	// resource/cbuffer/sampler to its own parameter with a concrete register and space.
 	void WalkParameter(slang::VariableLayoutReflection *param, ShaderReflectionData &out)
 	{
 		if (!param)
@@ -382,8 +380,6 @@ namespace
 			return;
 		}
 
-		// Loose top-level uniforms with no enclosing buffer (rare on D3D targets, but Slang
-		// can expose them directly as a "uniform" parameter).
 		const slang::ParameterCategory category = param->getCategory();
 		if (category == slang::ParameterCategory::Uniform)
 		{
@@ -459,8 +455,6 @@ namespace
 		}
 	}
 
-	// After code generation, ask Slang which reflected locations the compiled shader actually
-	// references. DXC pruned unused resources implicitly; this restores that behavior.
 	void ApplyUsedFilter(slang::IMetadata *metadata, ShaderReflectionData &out)
 	{
 		if (!metadata)
@@ -624,7 +618,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		moduleName = moduleName.substr(0, dot);
 	}
 
-	// A "library" target is a whole-program compile of every entry point into one DXIL blob.
 	bool anyLibrary = false;
 	for (const auto &entry: entryPoints)
 	{
@@ -666,7 +659,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		return result;
 	}
 
-	// The module is owned by the session and stays valid for as long as the session does.
 	ComPtr<slang::IBlob> moduleDiagnostics;
 	slang::IModule *module = nullptr;
 	{
@@ -683,9 +675,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		return result;
 	}
 
-	// Resolve each requested entry point and build the component list (module first). The
-	// ComPtr elements take their own reference; the underlying objects outlive the session
-	// only if something keeps them alive, which nothing here does past this function.
 	std::vector<ComPtr<slang::IComponentType>> components;
 	components.emplace_back(module);
 
@@ -695,6 +684,12 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 	{
 		const ParsedTargetProfile parsed = ParseTargetProfile(entry.targetProfile);
 		std::string entryName = Narrow(entry.entryPoint);
+
+		if (parsed.isLibrary && entryName.empty())
+		{
+			continue;
+		}
+
 		if (entryName.empty())
 		{
 			entryName = "main";
@@ -712,7 +707,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		}
 		else
 		{
-			// Library / raytracing: the stage comes from the [shader("...")] attribute.
 			hr = module->findEntryPointByName(entryName.c_str(), entryPointComponent.writeRef());
 		}
 		LogDiagnostics(entryDiag);
@@ -802,8 +796,6 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		return result;
 	}
 
-	// One CompiledShader per entry point. Entry point i sits at component index i+1, so its
-	// index within the linked program is i.
 	for (size_t i = 0; i < entryNames.size(); ++i)
 	{
 		ComPtr<slang::IBlob> codeDiag;
