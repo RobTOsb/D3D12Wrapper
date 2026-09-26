@@ -290,7 +290,6 @@ std::unique_ptr<D3D12Swapchain> D3D12Device::CreateSwapchain(
 											useHDR);
 }
 
-// std::unique_ptr<D3D12CommandList> D3D12Device::CreateCommandList — restored
 std::unique_ptr<D3D12CommandList> D3D12Device::CreateCommandList(D3D12CommandListType type)
 {
 	return std::make_unique<D3D12CommandList>(device_, type);

@@ -351,9 +351,6 @@ namespace
 		slang::TypeLayoutReflection *leaf = typeLayout->unwrapArray();
 		const slang::TypeReflection::Kind kind = leaf ? leaf->getKind() : slang::TypeReflection::Kind::None;
 
-		// ParameterBlock<T> assigns its own register space and packs resources relative to it;
-		// the reflected-root-signature builder has no model for that. Shaders targeting this
-		// wrapper should use flat register() bindings.
 		if (kind == slang::TypeReflection::Kind::ParameterBlock)
 		{
 			logw("Shader parameter '{}' is a ParameterBlock, which the generated root signature does "
@@ -362,9 +359,6 @@ namespace
 			return;
 		}
 
-		// A constant buffer (named ConstantBuffer<T>, cbuffer {}, or the implicit buffer Slang
-		// packs loose top-level uniforms into). Slang gives this a "constantBuffer" binding
-		// with a concrete register index.
 		if (kind == slang::TypeReflection::Kind::ConstantBuffer)
 		{
 			const std::string cbufferName = name.empty() ? std::string("$Globals") : name;
@@ -495,8 +489,6 @@ struct SlangShaderCompiler::Impl
 {
 	ComPtr<slang::IGlobalSession> globalSession;
 
-	// Builds the shared compiler-option list for one compile invocation. `storage` keeps the
-	// backing strings alive for the lifetime of the returned entries (deque => stable c_str()).
 	std::vector<slang::CompilerOptionEntry> BuildOptions(const std::vector<std::wstring> &arguments,
 														 std::deque<std::string> &storage) const
 	{
@@ -534,8 +526,9 @@ struct SlangShaderCompiler::Impl
 		pushInt(slang::CompilerOptionName::DebugInformation, SLANG_DEBUG_INFO_LEVEL_MAXIMAL);
 #else
 		pushInt(slang::CompilerOptionName::Optimization, SLANG_OPTIMIZATION_LEVEL_HIGH);
-		pushInt(slang::CompilerOptionName::DebugInformation, SLANG_DEBUG_INFO_LEVEL_NONE);
+		pushInt(slang::CompilerOptionName::DebugInformation, SLANG_DEBUG_INFO_LEVEL_STANDARD);
 #endif
+		pushString(slang::CompilerOptionName::DownstreamArgs, "dxc", "-Qembed_debug");
 
 		for (const auto &arg: arguments)
 		{
@@ -546,8 +539,6 @@ struct SlangShaderCompiler::Impl
 			const std::string narrow = Narrow(arg);
 			if (narrow.front() == '-' || narrow.front() == '/')
 			{
-				// Legacy DXC flags that have no Slang equivalent (16-bit types are implicit at
-				// sm_6_6, root signatures are always reflected, RT payloads are native).
 				if (narrow.rfind("-enable-16bit-types", 0) == 0 || narrow.rfind("-HV", 0) == 0 ||
 					narrow.rfind("-enable-payload-qualifiers", 0) == 0 || narrow.rfind("-rootsig-define", 0) == 0 ||
 					narrow.rfind("-Qembed_debug", 0) == 0 || narrow.rfind("-Zi", 0) == 0)
@@ -559,7 +550,6 @@ struct SlangShaderCompiler::Impl
 				continue;
 			}
 
-			// Bare token => a preprocessor define, optionally NAME=VALUE.
 			const size_t eq = narrow.find('=');
 			if (eq == std::string::npos)
 			{
