@@ -222,30 +222,6 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 	fmtlog::poll();
 }
 
-void D3D12Device::CreateSampler(const D3D12_SAMPLER_DESC &samplerDesc, CPUDescriptorHandle &destDescriptor)
-{
-	device_->CreateSampler(&samplerDesc, destDescriptor);
-}
-
-void D3D12Device::CreateUAV(D3D12Resource *resource,
-							D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc,
-							CPUDescriptorHandle &destDescriptor)
-{
-	device_->CreateUnorderedAccessView(resource->GetResource(), nullptr, &uavDesc, destDescriptor);
-}
-
-void D3D12Device::CreateSRV(D3D12Resource *resource,
-							D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc,
-							CPUDescriptorHandle &destDescriptor)
-{
-	device_->CreateShaderResourceView(resource->GetResource(), &srvDesc, destDescriptor);
-}
-
-void D3D12Device::CreateCBV(const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbvDesc, CPUDescriptorHandle &destDescriptor)
-{
-	device_->CreateConstantBufferView(&cbvDesc, destDescriptor);
-}
-
 void D3D12Device::GetCopyableFootprints1(const D3D12_RESOURCE_DESC1 &desc,
 										 UINT firstSubresource,
 										 UINT numSubresources,
@@ -440,85 +416,21 @@ std::unique_ptr<D3D12Resource> D3D12Device::CreateAccelerationStructureBuffer(ui
 	desc.Flags = isScratch ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 						   : D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 
-	return CreateResource3(desc, D3D12_HEAP_TYPE_DEFAULT, D3D12_BARRIER_LAYOUT_UNDEFINED);
-}
-
-Microsoft::WRL::ComPtr<D3D12MA::Allocation> D3D12Device::CreateResource(const D3D12_RESOURCE_DESC &desc,
-																		D3D12_HEAP_TYPE heapType,
-																		D3D12_RESOURCE_STATES initialLayout)
-{
 	D3D12MA::ALLOCATION_DESC allocDesc = {};
-	allocDesc.HeapType = heapType;
+	allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 
 	Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
 
-	HRESULT hr =
-			allocator_->CreateResource(&allocDesc, &desc, initialLayout, nullptr, &allocation, IID_PPV_ARGS(&resource));
-
-	if (FAILED(hr))
+	if (allocator_ == nullptr)
 	{
-		throw D3D12Exception("Failed to create D3D12 resource.", hr);
-	}
-
-	return allocation;
-}
-
-std::unique_ptr<D3D12Resource> D3D12Device::CreateResource3(const D3D12_RESOURCE_DESC1 &desc,
-															D3D12_HEAP_TYPE heapType,
-															D3D12_BARRIER_LAYOUT initialLayout)
-{
-	D3D12MA::ALLOCATION_DESC allocDesc = {};
-	allocDesc.HeapType = heapType;
-
-	Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr;
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-	bool isDepth = desc.Format == DXGI_FORMAT_D32_FLOAT || DXGI_FORMAT_R32_TYPELESS == desc.Format ||
-				   desc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT || DXGI_FORMAT_R24G8_TYPELESS == desc.Format;
-	bool isBuffer = desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
-	bool isRenderTarget = (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
-
-	D3D12_CLEAR_VALUE clearValue = {};
-	D3D12_CLEAR_VALUE *optimizedClearValue = nullptr;
-	if (isDepth)
-	{
-
-		if (desc.Format == DXGI_FORMAT_R32_TYPELESS)
-		{
-			clearValue.Format = DXGI_FORMAT_D32_FLOAT;
-		}
-		else if (desc.Format == DXGI_FORMAT_R24G8_TYPELESS)
-		{
-			clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-		}
-		else
-		{
-			clearValue.Format = desc.Format;
-		}
-
-		clearValue.DepthStencil.Depth = 0.0f;
-		clearValue.DepthStencil.Stencil = 0;
-		optimizedClearValue = &clearValue;
-	}
-	else if (isBuffer)
-	{
-
-		optimizedClearValue = nullptr;
-	}
-	else if (isRenderTarget)
-	{
-		clearValue.Format = desc.Format;
-		clearValue.Color[0] = 0.0f;
-		clearValue.Color[1] = 0.0f;
-		clearValue.Color[2] = 0.0f;
-		clearValue.Color[3] = 1.0f;
-		optimizedClearValue = &clearValue;
+		throw std::runtime_error("D3D12 Memory Allocator is not initialized.");
 	}
 
 	HRESULT hr = allocator_->CreateResource3(&allocDesc,
 											 &desc,
-											 initialLayout,
-											 optimizedClearValue,
+											 D3D12_BARRIER_LAYOUT_UNDEFINED,
+											 nullptr,
 											 0,
 											 nullptr,
 											 &allocation,
@@ -526,10 +438,10 @@ std::unique_ptr<D3D12Resource> D3D12Device::CreateResource3(const D3D12_RESOURCE
 
 	if (FAILED(hr))
 	{
-		throw D3D12Exception("Failed to create D3D12 resource.", hr);
+		throw D3D12Exception("Failed to create D3D12 acceleration structure buffer.", hr);
 	}
 
-	return std::make_unique<D3D12Resource>(allocation);
+	return std::make_unique<D3D12Buffer>(allocation);
 }
 
 std::unique_ptr<D3D12Buffer> D3D12Device::CreateBuffer(const D3D12_RESOURCE_DESC1 &desc,
