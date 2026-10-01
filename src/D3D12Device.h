@@ -33,15 +33,6 @@ public:
 
 	std::unique_ptr<D3D12Fence> CreateFence(uint64_t initialValue = 0);
 
-	Microsoft::WRL::ComPtr<D3D12MA::Allocation> CreateResource(
-			const D3D12_RESOURCE_DESC &desc,
-			D3D12_HEAP_TYPE heapType,
-			D3D12_RESOURCE_STATES initialLayout = D3D12_RESOURCE_STATE_COMMON);
-
-	std::unique_ptr<D3D12Resource> CreateResource3(const D3D12_RESOURCE_DESC1 &desc,
-												   D3D12_HEAP_TYPE heapType,
-												   D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED);
-
 	std::unique_ptr<D3D12Buffer> CreateBuffer(const D3D12_RESOURCE_DESC1 &desc,
 											  D3D12_HEAP_TYPE heapType,
 											  D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED);
@@ -49,15 +40,6 @@ public:
 	std::unique_ptr<D3D12Texture> CreateTexture(const D3D12_RESOURCE_DESC1 &desc,
 												D3D12_HEAP_TYPE heapType,
 												D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED);
-
-	void CreateSampler(const D3D12_SAMPLER_DESC &samplerDesc, CPUDescriptorHandle &destDescriptor);
-	void CreateUAV(D3D12Resource *resource,
-				   D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc,
-				   CPUDescriptorHandle &destDescriptor);
-	void CreateSRV(D3D12Resource *resource,
-				   D3D12_SHADER_RESOURCE_VIEW_DESC &srvDesc,
-				   CPUDescriptorHandle &destDescriptor);
-	void CreateCBV(const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbvDesc, CPUDescriptorHandle &destDescriptor);
 
 	void GetCopyableFootprints1(const D3D12_RESOURCE_DESC1 &desc,
 								UINT firstSubresource,
