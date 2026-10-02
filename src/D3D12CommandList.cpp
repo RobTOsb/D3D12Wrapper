@@ -632,6 +632,22 @@ void D3D12CommandList::WriteBreadcrumb(uint64_t destGpuVA, uint32_t value, D3D12
 	}
 }
 
+void D3D12CommandList::EndQuery(ID3D12QueryHeap *queryHeap, D3D12_QUERY_TYPE type, uint32_t index)
+{
+	commandList_->EndQuery(queryHeap, type, index);
+}
+
+void D3D12CommandList::ResolveQueryData(ID3D12QueryHeap *queryHeap,
+										D3D12_QUERY_TYPE type,
+										uint32_t startIndex,
+										uint32_t numQueries,
+										D3D12Resource *destinationBuffer,
+										uint64_t alignedDestinationBufferOffset)
+{
+	commandList_->ResolveQueryData(
+			queryHeap, type, startIndex, numQueries, destinationBuffer->GetResource(), alignedDestinationBufferOffset);
+}
+
 void D3D12CommandList::BeginEvent(const char *label)
 {
 	const std::wstring wLabel(label, label + strlen(label));

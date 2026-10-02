@@ -5,6 +5,7 @@
 #include "D3D12CommandAllocator.h"
 #include "D3D12DescriptorHeap.h"
 #include "D3D12Fence.h"
+#include "D3D12GPUProfiler.h"
 #include "D3D12Pipeline.h"
 #include "D3D12Resource.h"
 #include "D3D12Buffer.h"

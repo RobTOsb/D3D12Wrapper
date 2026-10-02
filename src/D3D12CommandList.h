@@ -158,6 +158,14 @@ public:
 						 uint32_t value,
 						 D3D12_WRITEBUFFERIMMEDIATE_MODE mode = D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN);
 
+	void EndQuery(ID3D12QueryHeap *queryHeap, D3D12_QUERY_TYPE type, uint32_t index);
+	void ResolveQueryData(ID3D12QueryHeap *queryHeap,
+						  D3D12_QUERY_TYPE type,
+						  uint32_t startIndex,
+						  uint32_t numQueries,
+						  D3D12Resource *destinationBuffer,
+						  uint64_t alignedDestinationBufferOffset);
+
 	// GPU debug annotation (shows up as nested events in RenderDoc/PIX).
 	void BeginEvent(const char *label);
 	void EndEvent();

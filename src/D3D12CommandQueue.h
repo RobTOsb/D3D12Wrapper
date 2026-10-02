@@ -31,6 +31,9 @@ public:
 		return commandQueue_;
 	}
 
+	// Ticks per second of the timestamps this queue's command lists write.
+	uint64_t GetTimestampFrequency() const;
+
 	void Wait(D3D12Fence *fence, uint64_t value);
 	void Signal(D3D12Fence *fence, uint64_t value);
 

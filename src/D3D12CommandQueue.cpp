@@ -31,6 +31,17 @@ D3D12CommandQueue::D3D12CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device> device
 	}
 }
 
+uint64_t D3D12CommandQueue::GetTimestampFrequency() const
+{
+	uint64_t frequency = 0;
+	HRESULT hr = commandQueue_->GetTimestampFrequency(&frequency);
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to get the command queue's timestamp frequency.", hr);
+	}
+	return frequency;
+}
+
 void D3D12CommandQueue::ExecuteCommandLists(D3D12CommandList **commandLists, uint32_t count)
 {
 	std::vector<ID3D12CommandList *> nativeCommandLists;

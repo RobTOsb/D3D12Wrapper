@@ -7,6 +7,7 @@ D3D12CommandQueue.cpp
 D3D12Swapchain.cpp
 D3D12CommandList.cpp
 D3D12Fence.cpp
+D3D12GPUProfiler.cpp
 D3D12Pipeline.cpp
 D3D12RootSignatureBuilder.cpp
 D3D12DescriptorHeap.cpp
