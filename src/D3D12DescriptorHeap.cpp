@@ -4,13 +4,16 @@
 
 D3D12DescriptorHeap::D3D12DescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
 										 uint32_t numDescriptors,
-										 D3D12_DESCRIPTOR_HEAP_FLAGS flags) :
-	device_(device), numDescriptors_(numDescriptors)
+										 D3D12_DESCRIPTOR_HEAP_FLAGS flags,
+										 uint32_t frameCount) : device_(device), numDescriptors_(numDescriptors)
 {
+	const D3D12_DESCRIPTOR_HEAP_FLAGS resourceFlags = frameCount > 0 ? D3D12_DESCRIPTOR_HEAP_FLAG_NONE : flags;
+	const D3D12_DESCRIPTOR_HEAP_FLAGS samplerFlags = frameCount > 0 ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : flags;
+
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	heapDesc.NumDescriptors = numDescriptors;
-	heapDesc.Flags = flags;
+	heapDesc.Flags = resourceFlags;
 	heapDesc.NodeMask = 0;
 
 	HRESULT hr = device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&resourceDescriptorHeap_));
@@ -22,7 +25,8 @@ D3D12DescriptorHeap::D3D12DescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> de
 	resourceDescriptorSize_ = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-    heapDesc.NumDescriptors = 2048;
+	heapDesc.NumDescriptors = 2048;
+	heapDesc.Flags = samplerFlags;
 	hr = device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&samplerDescriptorHeap_));
 	if (FAILED(hr))
 	{
@@ -42,6 +46,22 @@ D3D12DescriptorHeap::D3D12DescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> de
 	for (uint32_t i = 2048; i > 0; --i)
 	{
 		samplerFreeList_.push_back(i - 1);
+	}
+
+	frameHeaps_.resize(frameCount);
+	for (FrameHeaps &frame: frameHeaps_)
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC frameDesc = {};
+		frameDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		frameDesc.NumDescriptors = numDescriptors;
+		frameDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		frameDesc.NodeMask = 0;
+
+		hr = device->CreateDescriptorHeap(&frameDesc, IID_PPV_ARGS(&frame.resourceHeap));
+		if (FAILED(hr))
+		{
+			throw D3D12Exception("Failed to create per-frame D3D12 descriptor heap.", hr);
+		}
 	}
 }
 
@@ -93,7 +113,7 @@ GPUDescriptorHandle D3D12DescriptorHeap::GetGPUDescriptorHandle(uint32_t index) 
 		throw std::out_of_range("Descriptor index out of range.");
 	}
 
-	D3D12_GPU_DESCRIPTOR_HANDLE handle = resourceDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE handle = GetResourceDescriptorHeap()->GetGPUDescriptorHandleForHeapStart();
 	GPUDescriptorHandle gpuHandle(handle);
 	gpuHandle.Offset(static_cast<INT>(index), resourceDescriptorSize_);
 	return gpuHandle;
@@ -107,7 +127,7 @@ CPUDescriptorHandle D3D12DescriptorHeap::GetCPUDescriptorHandleForHeapStart() co
 
 GPUDescriptorHandle D3D12DescriptorHeap::GetGPUDescriptorHandleForHeapStart() const
 {
-	D3D12_GPU_DESCRIPTOR_HANDLE handle = resourceDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE handle = GetResourceDescriptorHeap()->GetGPUDescriptorHandleForHeapStart();
 	return GPUDescriptorHandle(handle);
 }
 
@@ -124,6 +144,7 @@ DescriptorHandle D3D12DescriptorHeap::CreateSRV(D3D12Resource *resource, D3D12_S
 	CPUDescriptorHandle destHandle = GetCPUDescriptorHandle(descriptorIndex);
 
 	device_->CreateShaderResourceView(resource->GetResource(), &srvDesc, destHandle);
+	MarkDirty();
 
 	return DescriptorHandle{ descriptorIndex };
 }
@@ -141,6 +162,7 @@ DescriptorHandle D3D12DescriptorHeap::CreateUAV(D3D12Resource *resource, D3D12_U
 	CPUDescriptorHandle destHandle = GetCPUDescriptorHandle(descriptorIndex);
 
 	device_->CreateUnorderedAccessView(resource->GetResource(), nullptr, &uavDesc, destHandle);
+	MarkDirty();
 
 	return DescriptorHandle{ descriptorIndex };
 }
@@ -149,12 +171,16 @@ void D3D12DescriptorHeap::CreateSRVAt(uint32_t index, D3D12Resource *resource, D
 {
 	CPUDescriptorHandle destHandle = GetCPUDescriptorHandle(index);
 	device_->CreateShaderResourceView(resource->GetResource(), &srvDesc, destHandle);
+	MarkDirty();
 }
 
-void D3D12DescriptorHeap::CreateUAVAt(uint32_t index, D3D12Resource *resource, D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc)
+void D3D12DescriptorHeap::CreateUAVAt(uint32_t index,
+									  D3D12Resource *resource,
+									  D3D12_UNORDERED_ACCESS_VIEW_DESC &uavDesc)
 {
 	CPUDescriptorHandle destHandle = GetCPUDescriptorHandle(index);
 	device_->CreateUnorderedAccessView(resource->GetResource(), nullptr, &uavDesc, destHandle);
+	MarkDirty();
 }
 
 DescriptorHandle D3D12DescriptorHeap::CreateCBV(const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbvDesc)
@@ -170,13 +196,14 @@ DescriptorHandle D3D12DescriptorHeap::CreateCBV(const D3D12_CONSTANT_BUFFER_VIEW
 	CPUDescriptorHandle destHandle = GetCPUDescriptorHandle(descriptorIndex);
 
 	device_->CreateConstantBufferView(&cbvDesc, destHandle);
+	MarkDirty();
 
 	return DescriptorHandle{ descriptorIndex };
 }
 
 DescriptorHandle D3D12DescriptorHeap::CreateSampler(const D3D12_SAMPLER_DESC &samplerDesc)
 {
-	if (resourceFreeList_.empty())
+	if (samplerFreeList_.empty())
 	{
 		throw std::runtime_error("No free descriptors available in the sampler heap.");
 	}
@@ -185,7 +212,7 @@ DescriptorHandle D3D12DescriptorHeap::CreateSampler(const D3D12_SAMPLER_DESC &sa
 	samplerFreeList_.pop_back();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE destHandle = samplerDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
-    CD3DX12_CPU_DESCRIPTOR_HANDLE offsetHandle(destHandle);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE offsetHandle(destHandle);
 	offsetHandle.Offset(static_cast<INT>(descriptorIndex), samplerDescriptorSize_);
 
 	device_->CreateSampler(&samplerDesc, offsetHandle);
@@ -212,15 +239,16 @@ DescriptorHandle D3D12DescriptorHeap::CreateAccelerationStructureSRV(D3D12_GPU_V
 
 	// Resource must be nullptr for acceleration structure SRVs.
 	device_->CreateShaderResourceView(nullptr, &srvDesc, destHandle);
+	MarkDirty();
 
 	return DescriptorHandle{ descriptorIndex };
 }
 
 void D3D12DescriptorHeap::FreeResource(DescriptorHandle handle)
 {
-    if (handle == InvalidDescriptorHandle)
-        return;
-    resourceFreeList_.push_back(static_cast<uint32_t>(handle));
+	if (handle == InvalidDescriptorHandle)
+		return;
+	resourceFreeList_.push_back(static_cast<uint32_t>(handle));
 }
 
 void D3D12DescriptorHeap::FreeSampler(DescriptorHandle handle)
@@ -228,4 +256,42 @@ void D3D12DescriptorHeap::FreeSampler(DescriptorHandle handle)
 	if (handle == InvalidDescriptorHandle)
 		return;
 	samplerFreeList_.push_back(static_cast<uint32_t>(handle));
+}
+
+void D3D12DescriptorHeap::BeginFrame(uint32_t frameIndex)
+{
+	if (frameIndex >= frameHeaps_.size())
+	{
+		throw std::out_of_range("Frame index out of range for descriptor heap.");
+	}
+	currentFrameIndex_ = frameIndex;
+}
+
+void D3D12DescriptorHeap::Flush()
+{
+	if (frameHeaps_.empty())
+	{
+		return;
+	}
+
+	FrameHeaps &frame = frameHeaps_[currentFrameIndex_];
+	if (!frame.dirty)
+	{
+		return;
+	}
+
+	device_->CopyDescriptorsSimple(numDescriptors_,
+								   frame.resourceHeap->GetCPUDescriptorHandleForHeapStart(),
+								   resourceDescriptorHeap_->GetCPUDescriptorHandleForHeapStart(),
+								   D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	frame.dirty = false;
+}
+
+void D3D12DescriptorHeap::MarkDirty()
+{
+	for (FrameHeaps &frame: frameHeaps_)
+	{
+		frame.dirty = true;
+	}
 }
