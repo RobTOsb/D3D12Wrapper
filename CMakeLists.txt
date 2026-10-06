@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 include(cmake/CPM.cmake)
 include(cmake/download_slang.cmake)
 include(cmake/download_agility_sdk.cmake)
+include(cmake/download_dxc.cmake)
 
 cpmaddpackage(
     NAME DirectXTex
