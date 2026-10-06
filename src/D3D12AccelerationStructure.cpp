@@ -15,6 +15,11 @@ D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDe
 	geometryDesc_.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 	geometryDesc_.Flags =
 			geometry.isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+	if (geometry.noDuplicateAnyHit)
+	{
+		geometryDesc_.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
+	}
+	
 	geometryDesc_.Triangles.Transform3x4 = 0;
 	geometryDesc_.Triangles.IndexFormat = geometry.indexFormat;
 	geometryDesc_.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;

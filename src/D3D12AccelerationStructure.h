@@ -15,6 +15,7 @@ struct BLASGeometryDesc
 	uint32_t indexCount = 0;
 	DXGI_FORMAT indexFormat = DXGI_FORMAT_R32_UINT;
 	bool isOpaque = true;
+	bool noDuplicateAnyHit = false;
 };
 
 // One BLAS per mesh. Rebuild-only (no refit/update) - appropriate for a static scene.
