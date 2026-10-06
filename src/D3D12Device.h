@@ -79,9 +79,25 @@ public:
 		return allocator_;
 	}
 
+	// DXR 1.2 shader execution reordering: lib_6_9 shaders can use HitObject and MaybeReorderThread.
+	bool SupportsShaderExecutionReordering() const
+	{
+		return serSupported_;
+	}
+
+	// False where the driver implements MaybeReorderThread as a no-op.
+	bool ShaderExecutionReorderingActuallyReorders() const
+	{
+		return serActuallyReorders_;
+	}
+
 private:
+	void QueryShaderExecutionReordering();
+
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory_;
 	Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter_;
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator_;
+	bool serSupported_ = false;
+	bool serActuallyReorders_ = false;
 };

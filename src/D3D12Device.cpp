@@ -11,15 +11,11 @@
 
 #include <string>
 
-// extern "C"
-// {
-// 	__declspec(dllexport) extern const UINT D3D12SDKVersion = 717;
-// }
-//
-// extern "C"
-// {
-// 	__declspec(dllexport) extern const char *D3D12SDKPath = ".\\D3D12\\";
-// }
+extern "C"
+{
+	__declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_AGILITY_SDK_VERSION;
+	__declspec(dllexport) extern const char *D3D12SDKPath = ".\\D3D12\\";
+}
 
 static void *AllocationCallback(size_t size, size_t alignment, void *pPrivateData)
 {
@@ -180,6 +176,8 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 			 GPUUploadHeapSupported ? "TRUE" : "FALSE");
 	}
 
+	QueryShaderExecutionReordering();
+
 	Microsoft::WRL::ComPtr<IDXGIAdapter3> spAdapter;
 	hr = adapter_.As(&spAdapter);
 	if (FAILED(hr))
@@ -220,6 +218,37 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 	}
 
 	fmtlog::poll();
+}
+
+void D3D12Device::QueryShaderExecutionReordering()
+{
+	// SER is a required part of Shader Model 6.9 on raytracing devices and of raytracing tier 1.2.
+	D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_9 };
+	const bool sm69 = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL,
+															 &shaderModel,
+															 sizeof(shaderModel))) &&
+					  shaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_9;
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
+	const bool tier12 = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5,
+															   &options5,
+															   sizeof(options5))) &&
+						options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2;
+
+	serSupported_ = sm69 && tier12;
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS22 options22 = {};
+	serActuallyReorders_ = serSupported_ &&
+						   SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS22,
+																  &options22,
+																  sizeof(options22))) &&
+						   options22.ShaderExecutionReorderingActuallyReorders;
+
+	logi("Shader model 6.9: {}, raytracing tier: {}.{}, shader execution reordering: {}",
+		 sm69 ? "yes" : "no",
+		 static_cast<int>(options5.RaytracingTier) / 10,
+		 static_cast<int>(options5.RaytracingTier) % 10,
+		 serSupported_ ? (serActuallyReorders_ ? "yes" : "yes (no-op on this driver)") : "no");
 }
 
 void D3D12Device::GetCopyableFootprints1(const D3D12_RESOURCE_DESC1 &desc,
@@ -413,8 +442,10 @@ std::unique_ptr<D3D12Resource> D3D12Device::CreateAccelerationStructureBuffer(ui
 	desc.Format = DXGI_FORMAT_UNKNOWN;
 	desc.SampleDesc = { 1, 0 };
 	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	// The Agility SDK runtime rejects RAYTRACING_ACCELERATION_STRUCTURE without ALLOW_UNORDERED_ACCESS.
 	desc.Flags = isScratch ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-						   : D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
+						   : D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE |
+									 D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	D3D12MA::ALLOCATION_DESC allocDesc = {};
 	allocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
