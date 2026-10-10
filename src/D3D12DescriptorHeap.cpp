@@ -5,10 +5,10 @@
 D3D12DescriptorHeap::D3D12DescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
 										 uint32_t numDescriptors,
 										 D3D12_DESCRIPTOR_HEAP_FLAGS flags,
-										 uint32_t frameCount) : device_(device), numDescriptors_(numDescriptors)
+										 uint32_t framesInFlight) : device_(device), numDescriptors_(numDescriptors)
 {
-	const D3D12_DESCRIPTOR_HEAP_FLAGS resourceFlags = frameCount > 0 ? D3D12_DESCRIPTOR_HEAP_FLAG_NONE : flags;
-	const D3D12_DESCRIPTOR_HEAP_FLAGS samplerFlags = frameCount > 0 ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : flags;
+	const D3D12_DESCRIPTOR_HEAP_FLAGS resourceFlags = framesInFlight > 0 ? D3D12_DESCRIPTOR_HEAP_FLAG_NONE : flags;
+	const D3D12_DESCRIPTOR_HEAP_FLAGS samplerFlags = framesInFlight > 0 ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : flags;
 
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -48,7 +48,7 @@ D3D12DescriptorHeap::D3D12DescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> de
 		samplerFreeList_.push_back(i - 1);
 	}
 
-	frameHeaps_.resize(frameCount);
+	frameHeaps_.resize(framesInFlight);
 	for (FrameHeaps &frame: frameHeaps_)
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC frameDesc = {};

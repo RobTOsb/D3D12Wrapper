@@ -25,7 +25,7 @@ public:
 													void *hwnd,
 													uint32_t width,
 													uint32_t height,
-													uint32_t bufferCount = 3,
+													uint32_t imageCount = 3,
 													bool useHDR = false);
 
 	std::unique_ptr<D3D12CommandAllocator> CreateCommandAllocator(D3D12CommandListType type);

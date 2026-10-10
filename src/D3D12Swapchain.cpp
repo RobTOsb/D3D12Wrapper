@@ -10,12 +10,18 @@ D3D12Swapchain::D3D12Swapchain(Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory
 							   void *hwnd,
 							   uint32_t width,
 							   uint32_t height,
-							   uint32_t bufferCount,
+							   uint32_t imageCount,
 							   bool useHDR)
 {
+	if (imageCount < 2 || imageCount > DXGI_MAX_SWAP_CHAIN_BUFFERS)
+	{
+		throw D3D12Exception("Swapchain image count must be in [2, DXGI_MAX_SWAP_CHAIN_BUFFERS] for flip model.",
+							 E_INVALIDARG);
+	}
+
 	width_ = width;
 	height_ = height;
-	bufferCount_ = bufferCount;
+	imageCount_ = imageCount;
 
 	// Create swapchain description
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
@@ -26,7 +32,7 @@ D3D12Swapchain::D3D12Swapchain(Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory
 	swapchainDesc.SampleDesc.Count = 1;
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapchainDesc.BufferCount = bufferCount;
+	swapchainDesc.BufferCount = imageCount;
 	swapchainDesc.Scaling = DXGI_SCALING_STRETCH;
 	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -69,8 +75,8 @@ D3D12Swapchain::D3D12Swapchain(Microsoft::WRL::ComPtr<IDXGIFactory6> dxgiFactory
 		}
 	}
 
-	backBuffers_.resize(bufferCount);
-	for (uint32_t i = 0; i < bufferCount; ++i)
+	backBuffers_.resize(imageCount);
+	for (uint32_t i = 0; i < imageCount; ++i)
 	{
 		backBuffers_[i] = std::make_unique<D3D12Texture>();
 		Microsoft::WRL::ComPtr<ID3D12Resource> bufferResource;
@@ -104,7 +110,7 @@ void D3D12Swapchain::Resize(uint32_t width, uint32_t height)
 		backBuffer->SetResource(nullptr);
 	}
 
-	HRESULT hr = swapchain_->ResizeBuffers(bufferCount_, width, height, backBufferFormat_, swapchainFlags_);
+	HRESULT hr = swapchain_->ResizeBuffers(imageCount_, width, height, backBufferFormat_, swapchainFlags_);
 	if (FAILED(hr))
 	{
 		throw D3D12Exception("Failed to resize DXGI swapchain.", hr);
@@ -113,7 +119,7 @@ void D3D12Swapchain::Resize(uint32_t width, uint32_t height)
 	width_ = width;
 	height_ = height;
 
-	for (uint32_t i = 0; i < bufferCount_; ++i)
+	for (uint32_t i = 0; i < imageCount_; ++i)
 	{
 		Microsoft::WRL::ComPtr<ID3D12Resource> bufferResource;
 		hr = swapchain_->GetBuffer(i, IID_PPV_ARGS(&bufferResource));

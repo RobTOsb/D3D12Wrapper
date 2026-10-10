@@ -283,7 +283,7 @@ std::unique_ptr<D3D12CommandQueue> D3D12Device::CreateCommandQueue(D3D12QueueTyp
 }
 
 std::unique_ptr<D3D12Swapchain> D3D12Device::CreateSwapchain(
-		D3D12CommandQueue *commandQueue, void *hwnd, uint32_t width, uint32_t height, uint32_t bufferCount, bool useHDR)
+		D3D12CommandQueue *commandQueue, void *hwnd, uint32_t width, uint32_t height, uint32_t imageCount, bool useHDR)
 {
 	return std::make_unique<D3D12Swapchain>(dxgiFactory_,
 											device_,
@@ -291,7 +291,7 @@ std::unique_ptr<D3D12Swapchain> D3D12Device::CreateSwapchain(
 											hwnd,
 											width,
 											height,
-											bufferCount,
+											imageCount,
 											useHDR);
 }
 

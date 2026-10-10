@@ -10,7 +10,7 @@ D3D12ImguiRenderer::D3D12ImguiRenderer(D3D12Device *device,
 									   D3D12CommandQueue *commandQueue,
 									   D3D12DescriptorHeap *globalDescriptorHeap,
 									   void *hwnd,
-									   uint32_t frameCount) : descriptorHeap_(globalDescriptorHeap)
+									   uint32_t framesInFlight) : descriptorHeap_(globalDescriptorHeap)
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -31,7 +31,7 @@ D3D12ImguiRenderer::D3D12ImguiRenderer(D3D12Device *device,
 	ImGui_ImplDX12_InitInfo initInfo = {};
 	initInfo.Device = device->GetNativeDevice().Get();
 	initInfo.CommandQueue = commandQueue->GetNativeCommandQueue().Get();
-	initInfo.NumFramesInFlight = static_cast<int>(frameCount);
+	initInfo.NumFramesInFlight = static_cast<int>(framesInFlight);
 	initInfo.RTVFormat = rtvFormat;
 	initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
 	initInfo.SrvDescriptorHeap = globalDescriptorHeap->GetResourceDescriptorHeap();

@@ -10,7 +10,7 @@ public:
 	D3D12DescriptorHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
 						uint32_t numDescriptors,
 						D3D12_DESCRIPTOR_HEAP_FLAGS flags,
-						uint32_t frameCount = 0);
+						uint32_t framesInFlight = 0);
 
 	~D3D12DescriptorHeap() = default;
 

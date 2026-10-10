@@ -14,7 +14,7 @@ public:
 				   void *hwnd,
 				   uint32_t width,
 				   uint32_t height,
-				   uint32_t bufferCount,
+				   uint32_t imageCount,
 				   bool useHDR);
 	~D3D12Swapchain() = default;
 
@@ -43,6 +43,11 @@ public:
 		return backBuffers_;
 	}
 
+	uint32_t GetImageCount() const
+	{
+		return imageCount_;
+	}
+
 	uint32_t GetWidth() const
 	{
 		return width_;
@@ -62,6 +67,6 @@ private:
 	DXGI_FORMAT backBufferFormat_;
 	UINT width_;
 	UINT height_;
-	uint32_t bufferCount_;
+	uint32_t imageCount_;
 	UINT swapchainFlags_;
 };

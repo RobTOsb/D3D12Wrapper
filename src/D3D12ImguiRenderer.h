@@ -16,7 +16,7 @@ public:
 					   D3D12CommandQueue *commandQueue,
 					   D3D12DescriptorHeap *globalDescriptorHeap,
 					   void *hwnd,
-					   uint32_t frameCount);
+					   uint32_t framesInFlight);
 	~D3D12ImguiRenderer();
 
 	void NewFrame()
