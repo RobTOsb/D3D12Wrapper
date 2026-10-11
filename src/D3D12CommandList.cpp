@@ -583,7 +583,9 @@ void D3D12CommandList::ExecuteIndirect(ID3D12CommandSignature *commandSignature,
 }
 
 void D3D12CommandList::BuildRaytracingAccelerationStructure(
-		const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc)
+		const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc,
+		uint32_t numPostbuildInfoDescs,
+		const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC *postbuildInfoDescs)
 {
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> commandList4;
 	HRESULT hr = commandList_.As(&commandList4);
@@ -591,7 +593,20 @@ void D3D12CommandList::BuildRaytracingAccelerationStructure(
 	{
 		throw D3D12Exception("Failed to query ID3D12GraphicsCommandList4 interface.", hr);
 	}
-	commandList4->BuildRaytracingAccelerationStructure(&desc, 0, nullptr);
+	commandList4->BuildRaytracingAccelerationStructure(&desc, numPostbuildInfoDescs, postbuildInfoDescs);
+}
+
+void D3D12CommandList::CopyRaytracingAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS dest,
+														   D3D12_GPU_VIRTUAL_ADDRESS source,
+														   D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode)
+{
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> commandList4;
+	HRESULT hr = commandList_.As(&commandList4);
+	if (FAILED(hr))
+	{
+		throw D3D12Exception("Failed to query ID3D12GraphicsCommandList4 interface.", hr);
+	}
+	commandList4->CopyRaytracingAccelerationStructure(dest, source, mode);
 }
 
 void D3D12CommandList::DispatchRays(const D3D12_DISPATCH_RAYS_DESC &desc)

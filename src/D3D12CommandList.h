@@ -150,7 +150,13 @@ public:
 						 UINT argumentBufferOffset = 0,
 						 ID3D12Resource *countBuffer = nullptr,
 						 UINT countBufferOffset = 0);
-	void BuildRaytracingAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc);
+	void BuildRaytracingAccelerationStructure(
+			const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &desc,
+			uint32_t numPostbuildInfoDescs = 0,
+			const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC *postbuildInfoDescs = nullptr);
+	void CopyRaytracingAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS dest,
+											 D3D12_GPU_VIRTUAL_ADDRESS source,
+											 D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode);
 	void DispatchRays(const D3D12_DISPATCH_RAYS_DESC &desc);
 	void EmitUAVBarrier(D3D12Resource *resource = nullptr);
 

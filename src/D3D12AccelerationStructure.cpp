@@ -8,6 +8,13 @@
 #include "D3D12Exception.h"
 #include "D3D12Resource.h"
 
+namespace
+{
+	constexpr D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS kBLASBuildFlags =
+			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+}
+
 D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDesc &geometry)
 	: device_(device)
 {
@@ -31,7 +38,7 @@ D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDe
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
 	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-	inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+	inputs.Flags = kBLASBuildFlags;
 	inputs.NumDescs = 1;
 	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 	inputs.pGeometryDescs = &geometryDesc_;
@@ -40,23 +47,54 @@ D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDe
 	device_->GetRaytracingAccelerationStructurePrebuildInfo(inputs, prebuildInfo);
 
 	resultBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ResultDataMaxSizeInBytes, false);
-	scratchBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ScratchDataSizeInBytes, true);
+	resultSize_ = prebuildInfo.ResultDataMaxSizeInBytes;
+	scratchSize_ = prebuildInfo.ScratchDataSizeInBytes;
 }
 
 D3D12BottomLevelAS::~D3D12BottomLevelAS() = default;
 
 void D3D12BottomLevelAS::Build(D3D12CommandList *cmdList)
 {
+	if (!scratchBuffer_)
+	{
+		scratchBuffer_ = device_->CreateAccelerationStructureBuffer(scratchSize_, true);
+	}
+	Build(cmdList, scratchBuffer_->GetResource()->GetGPUVirtualAddress(), 0);
+}
+
+void D3D12BottomLevelAS::Build(D3D12CommandList *cmdList,
+							   D3D12_GPU_VIRTUAL_ADDRESS scratch,
+							   D3D12_GPU_VIRTUAL_ADDRESS compactedSizeAddress)
+{
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc = {};
 	desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-	desc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+	desc.Inputs.Flags = kBLASBuildFlags;
 	desc.Inputs.NumDescs = 1;
 	desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 	desc.Inputs.pGeometryDescs = &geometryDesc_;
 	desc.DestAccelerationStructureData = resultBuffer_->GetResource()->GetGPUVirtualAddress();
-	desc.ScratchAccelerationStructureData = scratchBuffer_->GetResource()->GetGPUVirtualAddress();
+	desc.ScratchAccelerationStructureData = scratch;
 
-	cmdList->BuildRaytracingAccelerationStructure(desc);
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC postbuild = {};
+	postbuild.DestBuffer = compactedSizeAddress;
+	postbuild.InfoType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
+	cmdList->BuildRaytracingAccelerationStructure(desc, compactedSizeAddress != 0 ? 1 : 0, &postbuild);
+}
+
+void D3D12BottomLevelAS::Compact(D3D12CommandList *cmdList, uint64_t compactedSize)
+{
+	std::unique_ptr<D3D12Resource> compacted = device_->CreateAccelerationStructureBuffer(compactedSize, false);
+	cmdList->CopyRaytracingAccelerationStructure(compacted->GetResource()->GetGPUVirtualAddress(),
+												 resultBuffer_->GetResource()->GetGPUVirtualAddress(),
+												 D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+	uncompactedBuffer_ = std::move(resultBuffer_);
+	resultBuffer_ = std::move(compacted);
+	resultSize_ = compactedSize;
+}
+
+void D3D12BottomLevelAS::ReleaseUncompacted()
+{
+	uncompactedBuffer_.reset();
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS D3D12BottomLevelAS::GetGPUVirtualAddress() const

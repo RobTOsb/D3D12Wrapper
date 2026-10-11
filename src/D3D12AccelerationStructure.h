@@ -18,7 +18,8 @@ struct BLASGeometryDesc
 	bool noDuplicateAnyHit = false;
 };
 
-// One BLAS per mesh. Rebuild-only (no refit/update) - appropriate for a static scene.
+// One BLAS per mesh. Rebuild-only (no refit/update) - appropriate for a static scene. Built with
+// compaction allowed, so it can shrink to its compacted size after the build.
 class D3D12BottomLevelAS
 {
 public:
@@ -26,15 +27,38 @@ public:
 	~D3D12BottomLevelAS();
 
 	// Emits the actual BuildRaytracingAccelerationStructure call. Caller must have already
-	// transitioned/barriered the source vertex/index buffers to a readable state.
+	// transitioned/barriered the source vertex/index buffers to a readable state. Allocates scratch
+	// memory of its own on the first call and keeps it.
 	void Build(D3D12CommandList *cmdList);
+	// The same with GetScratchSize() bytes of scratch memory the caller owns (256-byte aligned), and
+	// the compacted size written as a UINT64 to compactedSizeAddress (8-byte aligned, in a buffer in
+	// UAV access) unless it is 0.
+	void Build(D3D12CommandList *cmdList, D3D12_GPU_VIRTUAL_ADDRESS scratch, D3D12_GPU_VIRTUAL_ADDRESS compactedSizeAddress);
+
+	// Copies the built BLAS into a new buffer of compactedSize bytes, which it uses from then on.
+	// The old one stays alive until ReleaseUncompacted, to be called once the GPU is done copying.
+	void Compact(D3D12CommandList *cmdList, uint64_t compactedSize);
+	void ReleaseUncompacted();
+
+	uint64_t GetScratchSize() const
+	{
+		return scratchSize_;
+	}
+
+	uint64_t GetResultSize() const
+	{
+		return resultSize_;
+	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;
 
 private:
 	D3D12Device *device_ = nullptr;
 	std::unique_ptr<D3D12Resource> resultBuffer_;
+	std::unique_ptr<D3D12Resource> uncompactedBuffer_;
 	std::unique_ptr<D3D12Resource> scratchBuffer_;
+	uint64_t scratchSize_ = 0;
+	uint64_t resultSize_ = 0;
 	D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc_ = {};
 };
 
