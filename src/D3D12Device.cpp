@@ -236,6 +236,8 @@ void D3D12Device::QueryShaderExecutionReordering()
 						options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2;
 
 	serSupported_ = sm69 && tier12;
+	// Opacity micromaps are also part of tier 1.2.
+	ommSupported_ = sm69 && tier12;
 
 	D3D12_FEATURE_DATA_D3D12_OPTIONS22 options22 = {};
 	serActuallyReorders_ = serSupported_ &&
@@ -244,11 +246,12 @@ void D3D12Device::QueryShaderExecutionReordering()
 																  sizeof(options22))) &&
 						   options22.ShaderExecutionReorderingActuallyReorders;
 
-	logi("Shader model 6.9: {}, raytracing tier: {}.{}, shader execution reordering: {}",
+	logi("Shader model 6.9: {}, raytracing tier: {}.{}, shader execution reordering: {}, opacity micromaps: {}",
 		 sm69 ? "yes" : "no",
 		 static_cast<int>(options5.RaytracingTier) / 10,
 		 static_cast<int>(options5.RaytracingTier) % 10,
-		 serSupported_ ? (serActuallyReorders_ ? "yes" : "yes (no-op on this driver)") : "no");
+		 serSupported_ ? (serActuallyReorders_ ? "yes" : "yes (no-op on this driver)") : "no",
+		 ommSupported_ ? "yes" : "no");
 }
 
 void D3D12Device::GetCopyableFootprints1(const D3D12_RESOURCE_DESC1 &desc,

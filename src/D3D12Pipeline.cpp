@@ -437,9 +437,17 @@ void D3D12RaytracingPipeline::BuildRaytracingPipeline(const RaytracingPipelineCr
 	auto globalRootSig = raytracingPipelineDesc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
 	globalRootSig->SetRootSignature(rootSignature_.Get());
 
-	// Pipeline config (max recursion depth)
-	auto pipelineConfig = raytracingPipelineDesc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
-	pipelineConfig->Config(pipelineInfo.maxTraceRecursionDepth);
+	// Pipeline config (max recursion depth, and the flags in the CONFIG1 form where there are any)
+	if (pipelineInfo.allowOpacityMicromaps)
+	{
+		auto pipelineConfig = raytracingPipelineDesc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG1_SUBOBJECT>();
+		pipelineConfig->Config(pipelineInfo.maxTraceRecursionDepth, D3D12_RAYTRACING_PIPELINE_FLAG_ALLOW_OPACITY_MICROMAPS);
+	}
+	else
+	{
+		auto pipelineConfig = raytracingPipelineDesc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
+		pipelineConfig->Config(pipelineInfo.maxTraceRecursionDepth);
+	}
 
 	Microsoft::WRL::ComPtr<ID3D12Device5> device5;
 	hr = device_->QueryInterface(IID_PPV_ARGS(&device5));

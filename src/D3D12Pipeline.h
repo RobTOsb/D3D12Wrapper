@@ -298,6 +298,7 @@ struct RaytracingPipelineCreateInfo
 	uint32_t maxPayloadSizeInBytes = 0;
 	uint32_t maxAttributeSizeInBytes = 8; // Default: built-in triangle attributes (barycentrics)
 	uint32_t maxTraceRecursionDepth = 1;
+	bool allowOpacityMicromaps = false;
 
 	std::vector<RaytracingLocalRootSignatureAssociation> localRootSignatures;
 };

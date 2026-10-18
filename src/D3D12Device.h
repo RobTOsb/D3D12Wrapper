@@ -91,6 +91,12 @@ public:
 		return serActuallyReorders_;
 	}
 
+	// DXR 1.2 opacity micromaps, which ray queries can only opt in to from shader model 6.9.
+	bool SupportsOpacityMicromaps() const
+	{
+		return ommSupported_;
+	}
+
 private:
 	void QueryShaderExecutionReordering();
 
@@ -100,4 +106,5 @@ private:
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> allocator_;
 	bool serSupported_ = false;
 	bool serActuallyReorders_ = false;
+	bool ommSupported_ = false;
 };

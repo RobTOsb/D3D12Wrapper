@@ -1,5 +1,6 @@
 #include "D3D12AccelerationStructure.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "D3D12Buffer.h"
@@ -35,6 +36,21 @@ D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDe
 	geometryDesc_.Triangles.IndexBuffer = geometry.indexBufferVA;
 	geometryDesc_.Triangles.VertexBuffer.StartAddress = geometry.vertexBufferVA;
 	geometryDesc_.Triangles.VertexBuffer.StrideInBytes = geometry.vertexStride;
+
+	// The same triangles behind a pointer, next to their micromap indices. The opaque flag above only
+	// matters where the micromaps are disabled.
+	if (geometry.opacityMicromapIndexBufferVA != 0)
+	{
+		ommTriangles_ = geometryDesc_.Triangles;
+		ommLinkage_.OpacityMicromapIndexBuffer.StartAddress = geometry.opacityMicromapIndexBufferVA;
+		ommLinkage_.OpacityMicromapIndexBuffer.StrideInBytes = sizeof(uint32_t);
+		ommLinkage_.OpacityMicromapIndexFormat = DXGI_FORMAT_R32_UINT;
+		ommLinkage_.OpacityMicromapBaseLocation = 0;
+		ommLinkage_.OpacityMicromapArray = geometry.opacityMicromapArrayVA;
+		geometryDesc_.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
+		geometryDesc_.OmmTriangles.pTriangles = &ommTriangles_;
+		geometryDesc_.OmmTriangles.pOmmLinkage = &ommLinkage_;
+	}
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
 	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
@@ -98,6 +114,115 @@ void D3D12BottomLevelAS::ReleaseUncompacted()
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS D3D12BottomLevelAS::GetGPUVirtualAddress() const
+{
+	return resultBuffer_->GetResource()->GetGPUVirtualAddress();
+}
+
+D3D12OpacityMicromapArray::D3D12OpacityMicromapArray(D3D12Device *device,
+													 std::span<const uint8_t> data,
+													 std::span<const D3D12_RAYTRACING_OPACITY_MICROMAP_DESC> micromaps)
+	: device_(device)
+{
+	// Buffers start 64 KB aligned, beyond the 128 bytes the input data needs.
+	auto upload = [&](const void *source, uint64_t size, const wchar_t *name)
+	{
+		D3D12_RESOURCE_DESC1 desc = {};
+		desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		desc.Width = std::max<uint64_t>(size, 4);
+		desc.Height = 1;
+		desc.DepthOrArraySize = 1;
+		desc.MipLevels = 1;
+		desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.SampleDesc = { 1, 0 };
+		desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		std::unique_ptr<D3D12Buffer> buffer =
+				device_->CreateBuffer(desc, D3D12_HEAP_TYPE_UPLOAD, D3D12_BARRIER_LAYOUT_UNDEFINED);
+		buffer->SetName(name);
+		buffer->Map();
+		std::memcpy(buffer->GetMappedData(), source, size);
+		buffer->Unmap();
+		return buffer;
+	};
+	dataBuffer_ = upload(data.data(), data.size(), L"OpacityMicromapData");
+	descBuffer_ = upload(micromaps.data(), micromaps.size_bytes(), L"OpacityMicromapDescs");
+
+	// How many OMMs there are of each level and format, from which the driver sizes the array.
+	for (const D3D12_RAYTRACING_OPACITY_MICROMAP_DESC &micromap: micromaps)
+	{
+		auto entry = std::find_if(histogram_.begin(),
+								  histogram_.end(),
+								  [&](const D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY &e) {
+									  return e.SubdivisionLevel == micromap.SubdivisionLevel && e.Format == micromap.Format;
+								  });
+		if (entry == histogram_.end())
+		{
+			histogram_.push_back({ 0, micromap.SubdivisionLevel, micromap.Format });
+			entry = histogram_.end() - 1;
+		}
+		++entry->Count;
+	}
+
+	arrayDesc_.NumOmmHistogramEntries = static_cast<UINT>(histogram_.size());
+	arrayDesc_.pOmmHistogram = histogram_.data();
+	arrayDesc_.InputBuffer = dataBuffer_->GetResource()->GetGPUVirtualAddress();
+	arrayDesc_.PerOmmDescs.StartAddress = descBuffer_->GetResource()->GetGPUVirtualAddress();
+	arrayDesc_.PerOmmDescs.StrideInBytes = sizeof(D3D12_RAYTRACING_OPACITY_MICROMAP_DESC);
+
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
+	device_->GetRaytracingAccelerationStructurePrebuildInfo(Inputs(), prebuildInfo);
+
+	resultBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ResultDataMaxSizeInBytes, false);
+	resultSize_ = prebuildInfo.ResultDataMaxSizeInBytes;
+	scratchSize_ = prebuildInfo.ScratchDataSizeInBytes;
+}
+
+D3D12OpacityMicromapArray::~D3D12OpacityMicromapArray() = default;
+
+D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS D3D12OpacityMicromapArray::Inputs() const
+{
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
+	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_ARRAY;
+	inputs.Flags = kBLASBuildFlags;
+	inputs.NumDescs = 1;
+	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+	inputs.pOpacityMicromapArrayDesc = &arrayDesc_;
+	return inputs;
+}
+
+void D3D12OpacityMicromapArray::Build(D3D12CommandList *cmdList,
+									  D3D12_GPU_VIRTUAL_ADDRESS scratch,
+									  D3D12_GPU_VIRTUAL_ADDRESS compactedSizeAddress)
+{
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc = {};
+	desc.Inputs = Inputs();
+	desc.DestAccelerationStructureData = resultBuffer_->GetResource()->GetGPUVirtualAddress();
+	desc.ScratchAccelerationStructureData = scratch;
+
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC postbuild = {};
+	postbuild.DestBuffer = compactedSizeAddress;
+	postbuild.InfoType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
+	cmdList->BuildRaytracingAccelerationStructure(desc, compactedSizeAddress != 0 ? 1 : 0, &postbuild);
+}
+
+void D3D12OpacityMicromapArray::Compact(D3D12CommandList *cmdList, uint64_t compactedSize)
+{
+	std::unique_ptr<D3D12Resource> compacted = device_->CreateAccelerationStructureBuffer(compactedSize, false);
+	cmdList->CopyRaytracingAccelerationStructure(compacted->GetResource()->GetGPUVirtualAddress(),
+												 resultBuffer_->GetResource()->GetGPUVirtualAddress(),
+												 D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+	uncompactedBuffer_ = std::move(resultBuffer_);
+	resultBuffer_ = std::move(compacted);
+	resultSize_ = compactedSize;
+}
+
+void D3D12OpacityMicromapArray::ReleaseBuildResources()
+{
+	uncompactedBuffer_.reset();
+	dataBuffer_.reset();
+	descBuffer_.reset();
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS D3D12OpacityMicromapArray::GetGPUVirtualAddress() const
 {
 	return resultBuffer_->GetResource()->GetGPUVirtualAddress();
 }

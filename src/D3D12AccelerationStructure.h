@@ -5,6 +5,7 @@
 class D3D12Device;
 class D3D12CommandList;
 class D3D12Resource;
+class D3D12Buffer;
 
 struct BLASGeometryDesc
 {
@@ -16,6 +17,8 @@ struct BLASGeometryDesc
 	DXGI_FORMAT indexFormat = DXGI_FORMAT_R32_UINT;
 	bool isOpaque = true;
 	bool noDuplicateAnyHit = false;
+	D3D12_GPU_VIRTUAL_ADDRESS opacityMicromapArrayVA = 0;
+	D3D12_GPU_VIRTUAL_ADDRESS opacityMicromapIndexBufferVA = 0;
 };
 
 // One BLAS per mesh. Rebuild-only (no refit/update) - appropriate for a static scene. Built with
@@ -25,6 +28,10 @@ class D3D12BottomLevelAS
 public:
 	D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDesc &geometry);
 	~D3D12BottomLevelAS();
+
+	// geometryDesc_ points into the object itself when it has opacity micromaps.
+	D3D12BottomLevelAS(const D3D12BottomLevelAS &) = delete;
+	D3D12BottomLevelAS &operator=(const D3D12BottomLevelAS &) = delete;
 
 	// Emits the actual BuildRaytracingAccelerationStructure call. Caller must have already
 	// transitioned/barriered the source vertex/index buffers to a readable state. Allocates scratch
@@ -60,6 +67,52 @@ private:
 	uint64_t scratchSize_ = 0;
 	uint64_t resultSize_ = 0;
 	D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc_ = {};
+	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC ommTriangles_ = {}; // OMM_TRIANGLES geometry only
+	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC ommLinkage_ = {};
+};
+
+class D3D12OpacityMicromapArray
+{
+public:
+	// micromaps: one per OMM, its ByteOffset into data.
+	D3D12OpacityMicromapArray(D3D12Device *device,
+							  std::span<const uint8_t> data,
+							  std::span<const D3D12_RAYTRACING_OPACITY_MICROMAP_DESC> micromaps);
+	~D3D12OpacityMicromapArray();
+
+	D3D12OpacityMicromapArray(const D3D12OpacityMicromapArray &) = delete;
+	D3D12OpacityMicromapArray &operator=(const D3D12OpacityMicromapArray &) = delete;
+
+	// See D3D12BottomLevelAS::Build.
+	void Build(D3D12CommandList *cmdList, D3D12_GPU_VIRTUAL_ADDRESS scratch, D3D12_GPU_VIRTUAL_ADDRESS compactedSizeAddress);
+	void Compact(D3D12CommandList *cmdList, uint64_t compactedSize);
+	// The uncompacted array and the build inputs, once the GPU is done with them.
+	void ReleaseBuildResources();
+
+	uint64_t GetScratchSize() const
+	{
+		return scratchSize_;
+	}
+
+	uint64_t GetResultSize() const
+	{
+		return resultSize_;
+	}
+
+	D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;
+
+private:
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS Inputs() const;
+
+	D3D12Device *device_ = nullptr;
+	std::unique_ptr<D3D12Resource> resultBuffer_;
+	std::unique_ptr<D3D12Resource> uncompactedBuffer_;
+	std::unique_ptr<D3D12Buffer> dataBuffer_; // upload heap, the OC1 states
+	std::unique_ptr<D3D12Buffer> descBuffer_; // upload heap, D3D12_RAYTRACING_OPACITY_MICROMAP_DESC per OMM
+	std::vector<D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY> histogram_;
+	D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC arrayDesc_ = {};
+	uint64_t scratchSize_ = 0;
+	uint64_t resultSize_ = 0;
 };
 
 struct TLASInstanceDesc
