@@ -14,6 +14,21 @@ namespace
 	constexpr D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS kBLASBuildFlags =
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+
+	void WriteInstanceDescs(std::span<const TLASInstanceDesc> instances, D3D12_RAYTRACING_INSTANCE_DESC *dst)
+	{
+		for (size_t i = 0; i < instances.size(); ++i)
+		{
+			const TLASInstanceDesc &src = instances[i];
+			D3D12_RAYTRACING_INSTANCE_DESC &out = dst[i];
+			std::memcpy(out.Transform, src.transform, sizeof(out.Transform));
+			out.InstanceID = src.instanceID;
+			out.InstanceMask = src.instanceMask;
+			out.InstanceContributionToHitGroupIndex = src.hitGroupIndex;
+			out.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+			out.AccelerationStructure = src.blasAddress;
+		}
+	}
 }
 
 D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDesc &geometry)
@@ -243,6 +258,12 @@ D3D12TopLevelAS::D3D12TopLevelAS(D3D12Device *device, std::span<const TLASInstan
 	resultBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ResultDataMaxSizeInBytes, false);
 	scratchBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ScratchDataSizeInBytes, true);
 
+	instanceBuffer_ = CreateInstanceBuffer(instances);
+	buildInstances_ = instanceBuffer_.get();
+}
+
+std::unique_ptr<D3D12Buffer> D3D12TopLevelAS::CreateInstanceBuffer(std::span<const TLASInstanceDesc> instances) const
+{
 	const uint64_t instanceBufferSize = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * instanceCount_;
 
 	D3D12_RESOURCE_DESC1 instanceDesc = {};
@@ -260,22 +281,29 @@ D3D12TopLevelAS::D3D12TopLevelAS(D3D12Device *device, std::span<const TLASInstan
 			device_->CreateBuffer(instanceDesc, D3D12_HEAP_TYPE_UPLOAD, D3D12_BARRIER_LAYOUT_UNDEFINED);
 	instanceUpload->SetName(L"TLASInstanceBuffer");
 
+	// Kept mapped, so SetInstances can rewrite it in place.
 	instanceUpload->Map();
-	auto *dst = static_cast<D3D12_RAYTRACING_INSTANCE_DESC *>(instanceUpload->GetMappedData());
-	for (uint32_t i = 0; i < instanceCount_; ++i)
-	{
-		const TLASInstanceDesc &src = instances[i];
-		D3D12_RAYTRACING_INSTANCE_DESC &out = dst[i];
-		std::memcpy(out.Transform, src.transform, sizeof(out.Transform));
-		out.InstanceID = src.instanceID;
-		out.InstanceMask = src.instanceMask;
-		out.InstanceContributionToHitGroupIndex = src.hitGroupIndex;
-		out.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-		out.AccelerationStructure = src.blasAddress;
-	}
-	instanceUpload->Unmap();
+	WriteInstanceDescs(instances, static_cast<D3D12_RAYTRACING_INSTANCE_DESC *>(instanceUpload->GetMappedData()));
+	return instanceUpload;
+}
 
-	instanceBuffer_ = std::move(instanceUpload);
+void D3D12TopLevelAS::SetInstances(std::span<const TLASInstanceDesc> instances, uint32_t frameIndex, uint32_t frameCount)
+{
+	if (instances.size() != instanceCount_)
+	{
+		throw std::runtime_error("D3D12TopLevelAS::SetInstances: the instance count differs from the one at creation.");
+	}
+	frameInstanceBuffers_.resize(std::max<size_t>(frameInstanceBuffers_.size(), frameCount));
+	std::unique_ptr<D3D12Buffer> &buffer = frameInstanceBuffers_[frameIndex];
+	if (buffer == nullptr)
+	{
+		buffer = CreateInstanceBuffer(instances);
+	}
+	else
+	{
+		WriteInstanceDescs(instances, static_cast<D3D12_RAYTRACING_INSTANCE_DESC *>(buffer->GetMappedData()));
+	}
+	buildInstances_ = buffer.get();
 }
 
 D3D12TopLevelAS::~D3D12TopLevelAS() = default;
@@ -287,7 +315,7 @@ void D3D12TopLevelAS::Build(D3D12CommandList *cmdList)
 	desc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 	desc.Inputs.NumDescs = instanceCount_;
 	desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-	desc.Inputs.InstanceDescs = instanceBuffer_->GetResource()->GetGPUVirtualAddress();
+	desc.Inputs.InstanceDescs = buildInstances_->GetResource()->GetGPUVirtualAddress();
 	desc.DestAccelerationStructureData = resultBuffer_->GetResource()->GetGPUVirtualAddress();
 	desc.ScratchAccelerationStructureData = scratchBuffer_->GetResource()->GetGPUVirtualAddress();
 

@@ -131,7 +131,12 @@ public:
 	D3D12TopLevelAS(D3D12Device *device, std::span<const TLASInstanceDesc> instances);
 	~D3D12TopLevelAS();
 
-	void Build(D3D12CommandList *cmdList); // uploads the instance buffer and issues the build
+	void Build(D3D12CommandList *cmdList); // builds from the instances last given
+
+	// Replaces the instances, as many as at creation, for the next Build. They go to the instance
+	// buffer of frame frameIndex, one of frameCount, so a build of a frame still on the GPU keeps
+	// reading its own.
+	void SetInstances(std::span<const TLASInstanceDesc> instances, uint32_t frameIndex, uint32_t frameCount);
 
 	D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;
 	D3D12Resource *GetResource() const
@@ -140,9 +145,13 @@ public:
 	}
 
 private:
+	std::unique_ptr<D3D12Buffer> CreateInstanceBuffer(std::span<const TLASInstanceDesc> instances) const;
+
 	D3D12Device *device_ = nullptr;
 	std::unique_ptr<D3D12Resource> resultBuffer_;
 	std::unique_ptr<D3D12Resource> scratchBuffer_;
 	std::unique_ptr<D3D12Resource> instanceBuffer_; // upload-heap D3D12_RAYTRACING_INSTANCE_DESC array
+	std::vector<std::unique_ptr<D3D12Buffer>> frameInstanceBuffers_; // per frame in flight, made by SetInstances
+	D3D12Resource *buildInstances_ = nullptr; // the instance buffer Build reads
 	uint32_t instanceCount_ = 0;
 };
