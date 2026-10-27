@@ -25,7 +25,7 @@ namespace
 			out.InstanceID = src.instanceID;
 			out.InstanceMask = src.instanceMask;
 			out.InstanceContributionToHitGroupIndex = src.hitGroupIndex;
-			out.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+			out.Flags = src.flags;
 			out.AccelerationStructure = src.blasAddress;
 		}
 	}

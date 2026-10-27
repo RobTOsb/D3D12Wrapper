@@ -122,6 +122,7 @@ struct TLASInstanceDesc
 	uint32_t instanceID = 0; // becomes InstanceID() in HLSL
 	uint32_t instanceMask = 0xFF;
 	uint32_t hitGroupIndex = 0; // becomes InstanceContributionToHitGroupIndex
+	D3D12_RAYTRACING_INSTANCE_FLAGS flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 };
 
 // One TLAS for the whole scene. Rebuild-only (no refit/update).
