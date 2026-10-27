@@ -38,6 +38,8 @@ D3D12ImguiRenderer::D3D12ImguiRenderer(D3D12Device *device,
 	initInfo.LegacySingleSrvCpuDescriptor = cpuHandle;
 	initInfo.LegacySingleSrvGpuDescriptor = gpuHandle;
 	ImGui_ImplDX12_Init(&initInfo);
+	fontBackendGpuHandle_ = initInfo.LegacySingleSrvGpuDescriptor.ptr;
+	fontDrawGpuHandle_ = fontBackendGpuHandle_;
 
 	ImGui::Spectrum::LoadFont();
 
@@ -46,6 +48,7 @@ D3D12ImguiRenderer::D3D12ImguiRenderer(D3D12Device *device,
 
 D3D12ImguiRenderer::~D3D12ImguiRenderer()
 {
+	SetFontTextureHandle(fontDrawGpuHandle_, fontBackendGpuHandle_);
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
@@ -53,8 +56,38 @@ D3D12ImguiRenderer::~D3D12ImguiRenderer()
 		descriptorHeap_->FreeResource(fontDescriptorHandle_);
 }
 
+void D3D12ImguiRenderer::SetFontTextureHandle(UINT64 from, UINT64 to)
+{
+	if (from == to)
+		return;
+	for (ImTextureData *texture: ImGui::GetPlatformIO().Textures)
+	{
+		if (texture->TexID == (ImTextureID) from)
+			texture->SetTexID((ImTextureID) to);
+	}
+}
+
 void D3D12ImguiRenderer::RenderUI(D3D12CommandList *commandList)
 {
 	ImGui::Render();
+
+	SetFontTextureHandle(fontDrawGpuHandle_, fontBackendGpuHandle_);
+	bool updated = false;
+	for (ImTextureData *texture: ImGui::GetPlatformIO().Textures)
+	{
+		if (texture->Status != ImTextureStatus_OK)
+		{
+			ImGui_ImplDX12_UpdateTexture(texture);
+			updated = true;
+		}
+	}
+	if (updated)
+	{
+		descriptorHeap_->MarkDirty();
+		descriptorHeap_->Flush();
+	}
+	fontDrawGpuHandle_ = descriptorHeap_->GetGPUDescriptorHandle(fontDescriptorHandle_).ptr;
+	SetFontTextureHandle(fontBackendGpuHandle_, fontDrawGpuHandle_);
+
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList->GetNativeCommandList().Get());
 }

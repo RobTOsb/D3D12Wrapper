@@ -29,6 +29,11 @@ public:
 	void RenderUI(D3D12CommandList *commandList);
 
 private:
+	// Points the textures that use the font descriptor at the given GPU handle of it.
+	void SetFontTextureHandle(UINT64 from, UINT64 to);
+
 	D3D12DescriptorHeap *descriptorHeap_ = nullptr;
 	DescriptorHandle fontDescriptorHandle_ = InvalidDescriptorHandle;
+	UINT64 fontBackendGpuHandle_ = 0;
+	UINT64 fontDrawGpuHandle_ = 0;
 };

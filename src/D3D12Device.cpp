@@ -27,6 +27,114 @@ static void FreeCallback(void *ptr, void *pPrivateData)
 	mi_free(ptr);
 }
 
+// The device ReportDeviceRemoval asks, set once it is made.
+static Microsoft::WRL::ComPtr<ID3D12Device> g_reportedDevice;
+
+static std::string ToUtf8(const wchar_t *text)
+{
+	if (text == nullptr)
+		return "(unnamed)";
+	int size = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
+	std::string utf8(size > 0 ? size - 1 : 0, 0);
+	WideCharToMultiByte(CP_UTF8, 0, text, -1, utf8.data(), size, nullptr, nullptr);
+	return utf8;
+}
+
+static const char *BreadcrumbOpName(D3D12_AUTO_BREADCRUMB_OP op)
+{
+	switch (op)
+	{
+		case D3D12_AUTO_BREADCRUMB_OP_SETMARKER: return "SetMarker";
+		case D3D12_AUTO_BREADCRUMB_OP_BEGINEVENT: return "BeginEvent";
+		case D3D12_AUTO_BREADCRUMB_OP_ENDEVENT: return "EndEvent";
+		case D3D12_AUTO_BREADCRUMB_OP_DRAWINSTANCED: return "DrawInstanced";
+		case D3D12_AUTO_BREADCRUMB_OP_DRAWINDEXEDINSTANCED: return "DrawIndexedInstanced";
+		case D3D12_AUTO_BREADCRUMB_OP_EXECUTEINDIRECT: return "ExecuteIndirect";
+		case D3D12_AUTO_BREADCRUMB_OP_DISPATCH: return "Dispatch";
+		case D3D12_AUTO_BREADCRUMB_OP_COPYBUFFERREGION: return "CopyBufferRegion";
+		case D3D12_AUTO_BREADCRUMB_OP_COPYTEXTUREREGION: return "CopyTextureRegion";
+		case D3D12_AUTO_BREADCRUMB_OP_COPYRESOURCE: return "CopyResource";
+		case D3D12_AUTO_BREADCRUMB_OP_CLEARRENDERTARGETVIEW: return "ClearRenderTargetView";
+		case D3D12_AUTO_BREADCRUMB_OP_CLEARUNORDEREDACCESSVIEW: return "ClearUnorderedAccessView";
+		case D3D12_AUTO_BREADCRUMB_OP_RESOURCEBARRIER: return "ResourceBarrier";
+		case D3D12_AUTO_BREADCRUMB_OP_PRESENT: return "Present";
+		case D3D12_AUTO_BREADCRUMB_OP_BEGINSUBMISSION: return "BeginSubmission";
+		case D3D12_AUTO_BREADCRUMB_OP_ENDSUBMISSION: return "EndSubmission";
+		case D3D12_AUTO_BREADCRUMB_OP_BUILDRAYTRACINGACCELERATIONSTRUCTURE: return "BuildRaytracingAccelerationStructure";
+		case D3D12_AUTO_BREADCRUMB_OP_EMITRAYTRACINGACCELERATIONSTRUCTUREPOSTBUILDINFO: return "EmitRaytracingAccelerationStructurePostbuildInfo";
+		case D3D12_AUTO_BREADCRUMB_OP_COPYRAYTRACINGACCELERATIONSTRUCTURE: return "CopyRaytracingAccelerationStructure";
+		case D3D12_AUTO_BREADCRUMB_OP_DISPATCHRAYS: return "DispatchRays";
+		case D3D12_AUTO_BREADCRUMB_OP_EXECUTEMETACOMMAND: return "ExecuteMetaCommand";
+		case D3D12_AUTO_BREADCRUMB_OP_SETPIPELINESTATE1: return "SetPipelineState1";
+		case D3D12_AUTO_BREADCRUMB_OP_EXECUTEEXTENSIONCOMMAND: return "ExecuteExtensionCommand";
+		case D3D12_AUTO_BREADCRUMB_OP_DISPATCHMESH: return "DispatchMesh";
+		case D3D12_AUTO_BREADCRUMB_OP_BARRIER: return "Barrier";
+		case D3D12_AUTO_BREADCRUMB_OP_BEGIN_COMMAND_LIST: return "BeginCommandList";
+		default: return "(other)";
+	}
+}
+
+void ReportDeviceRemoval()
+{
+	static bool reported = false;
+	if (reported || g_reportedDevice == nullptr)
+		return;
+	const HRESULT reason = g_reportedDevice->GetDeviceRemovedReason();
+	if (SUCCEEDED(reason))
+		return;
+	reported = true;
+	loge("D3D12: the device was removed, reason 0x{:08X}", static_cast<uint32_t>(reason));
+
+	Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData1> dred;
+	if (FAILED(g_reportedDevice.As(&dred)))
+	{
+		loge("DRED: no data on this device");
+		fmtlog::poll(true);
+		return;
+	}
+
+	// The command lists the GPU did not finish, each with the operations around where it stopped and the
+	// marker (BeginEvent) text recorded with them.
+	D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 breadcrumbs = {};
+	if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput1(&breadcrumbs)))
+	{
+		for (const D3D12_AUTO_BREADCRUMB_NODE1 *node = breadcrumbs.pHeadAutoBreadcrumbNode; node != nullptr; node = node->pNext)
+		{
+			const UINT done = node->pLastBreadcrumbValue != nullptr ? *node->pLastBreadcrumbValue : 0;
+			if (node->pCommandHistory == nullptr || done >= node->BreadcrumbCount)
+				continue;
+			loge("DRED: command list '{}' on queue '{}' stopped after {} of {} operations",
+				 ToUtf8(node->pCommandListDebugNameW),
+				 ToUtf8(node->pCommandQueueDebugNameW),
+				 done,
+				 node->BreadcrumbCount);
+			const UINT first = done > 12 ? done - 12 : 0;
+			const UINT last = (std::min)(node->BreadcrumbCount, done + 4);
+			for (UINT i = first; i < last; ++i)
+			{
+				std::string context;
+				for (UINT c = 0; c < node->BreadcrumbContextsCount; ++c)
+				{
+					if (node->pBreadcrumbContexts[c].BreadcrumbIndex == i)
+						context = " '" + ToUtf8(node->pBreadcrumbContexts[c].pContextString) + "'";
+				}
+				loge("DRED: {} {:5} {}{}", i == done ? "->" : "  ", i, BreadcrumbOpName(node->pCommandHistory[i]), context);
+			}
+		}
+	}
+
+	D3D12_DRED_PAGE_FAULT_OUTPUT1 pageFault = {};
+	if (SUCCEEDED(dred->GetPageFaultAllocationOutput1(&pageFault)) && pageFault.PageFaultVA != 0)
+	{
+		loge("DRED: page fault at GPU address 0x{:X}", pageFault.PageFaultVA);
+		for (const D3D12_DRED_ALLOCATION_NODE1 *node = pageFault.pHeadExistingAllocationNode; node != nullptr; node = node->pNext)
+			loge("DRED:   allocation there: '{}' (type {})", ToUtf8(node->ObjectNameW), static_cast<int>(node->AllocationType));
+		for (const D3D12_DRED_ALLOCATION_NODE1 *node = pageFault.pHeadRecentFreedAllocationNode; node != nullptr; node = node->pNext)
+			loge("DRED:   recently freed there: '{}' (type {})", ToUtf8(node->ObjectNameW), static_cast<int>(node->AllocationType));
+	}
+	fmtlog::poll(true);
+}
+
 static void PrintAdapterInfo(DXGI_ADAPTER_DESC1 &desc)
 {
 	int size = WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, nullptr, 0, nullptr, nullptr);
@@ -104,6 +212,23 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 	HRESULT hr;
 
 	UINT dxgiFactoryFlags = 0;
+	// In every build, without the debug layer too, so that a device removal can say where the GPU stopped
+	// (ReportDeviceRemoval). Must come before the device is made.
+	{
+		Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dredSettings;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings))))
+		{
+			dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			dredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			logi("DRED: Auto-breadcrumbs, page fault tracking, and breadcrumb context enabled.");
+		}
+		else
+		{
+			logw("DRED: ID3D12DeviceRemovedExtendedDataSettings1 unavailable; hang diagnostics will be "
+				 "limited.");
+		}
+	}
 #ifdef _DEBUG
 	{
 		Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
@@ -115,22 +240,6 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 			Microsoft::WRL::ComPtr<ID3D12Debug1> debugController1;
 			// if (SUCCEEDED(debugController.As(&debugController1)))
 			// 	debugController1->SetEnableGPUBasedValidation(TRUE);
-
-			{
-				Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dredSettings;
-				if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings))))
-				{
-					dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-					dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-					dredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-					logi("DRED: Auto-breadcrumbs, page fault tracking, and breadcrumb context enabled.");
-				}
-				else
-				{
-					logw("DRED: ID3D12DeviceRemovedExtendedDataSettings1 unavailable; hang diagnostics will be "
-						 "limited.");
-				}
-			}
 
 			// Enable additional debug layers.
 			dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
@@ -166,6 +275,7 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 	{
 		throw D3D12Exception("Failed to create D3D12 Device.", hr);
 	}
+	device_.As(&g_reportedDevice);
 
 	D3D12_FEATURE_DATA_D3D12_OPTIONS16 options16 = {};
 	bool GPUUploadHeapSupported = false;
