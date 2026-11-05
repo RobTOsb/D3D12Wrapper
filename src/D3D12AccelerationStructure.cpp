@@ -31,55 +31,68 @@ namespace
 	}
 }
 
-D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDesc &geometry)
+D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, std::span<const BLASGeometryDesc> geometries)
 	: device_(device)
 {
-	geometryDesc_ = {};
-	geometryDesc_.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-	geometryDesc_.Flags =
-			geometry.isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
-	if (geometry.noDuplicateAnyHit)
+	geometryDescs_.resize(geometries.size());
+	ommTriangles_.resize(geometries.size());
+	ommLinkages_.resize(geometries.size());
+	for (size_t i = 0; i < geometries.size(); ++i)
 	{
-		geometryDesc_.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
+		const BLASGeometryDesc &geometry = geometries[i];
+		D3D12_RAYTRACING_GEOMETRY_DESC &desc = geometryDescs_[i];
+		desc = {};
+		desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+		desc.Flags = geometry.isOpaque ? D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE : D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+		if (geometry.noDuplicateAnyHit)
+		{
+			desc.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
+		}
+
+		desc.Triangles.Transform3x4 = 0;
+		desc.Triangles.IndexFormat = geometry.indexFormat;
+		desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+		desc.Triangles.IndexCount = geometry.indexCount;
+		desc.Triangles.VertexCount = geometry.vertexCount;
+		desc.Triangles.IndexBuffer = geometry.indexBufferVA;
+		desc.Triangles.VertexBuffer.StartAddress = geometry.vertexBufferVA;
+		desc.Triangles.VertexBuffer.StrideInBytes = geometry.vertexStride;
+
+		// The same triangles behind a pointer, next to their micromap indices. The opaque flag above only
+		// matters where the micromaps are disabled.
+		if (geometry.opacityMicromapIndexBufferVA != 0)
+		{
+			ommTriangles_[i] = desc.Triangles;
+			D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC &linkage = ommLinkages_[i];
+			linkage.OpacityMicromapIndexBuffer.StartAddress = geometry.opacityMicromapIndexBufferVA;
+			linkage.OpacityMicromapIndexBuffer.StrideInBytes = sizeof(uint32_t);
+			linkage.OpacityMicromapIndexFormat = DXGI_FORMAT_R32_UINT;
+			linkage.OpacityMicromapBaseLocation = 0;
+			linkage.OpacityMicromapArray = geometry.opacityMicromapArrayVA;
+			desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
+			desc.OmmTriangles.pTriangles = &ommTriangles_[i];
+			desc.OmmTriangles.pOmmLinkage = &linkage;
+		}
 	}
-	
-	geometryDesc_.Triangles.Transform3x4 = 0;
-	geometryDesc_.Triangles.IndexFormat = geometry.indexFormat;
-	geometryDesc_.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-	geometryDesc_.Triangles.IndexCount = geometry.indexCount;
-	geometryDesc_.Triangles.VertexCount = geometry.vertexCount;
-	geometryDesc_.Triangles.IndexBuffer = geometry.indexBufferVA;
-	geometryDesc_.Triangles.VertexBuffer.StartAddress = geometry.vertexBufferVA;
-	geometryDesc_.Triangles.VertexBuffer.StrideInBytes = geometry.vertexStride;
 
-	// The same triangles behind a pointer, next to their micromap indices. The opaque flag above only
-	// matters where the micromaps are disabled.
-	if (geometry.opacityMicromapIndexBufferVA != 0)
-	{
-		ommTriangles_ = geometryDesc_.Triangles;
-		ommLinkage_.OpacityMicromapIndexBuffer.StartAddress = geometry.opacityMicromapIndexBufferVA;
-		ommLinkage_.OpacityMicromapIndexBuffer.StrideInBytes = sizeof(uint32_t);
-		ommLinkage_.OpacityMicromapIndexFormat = DXGI_FORMAT_R32_UINT;
-		ommLinkage_.OpacityMicromapBaseLocation = 0;
-		ommLinkage_.OpacityMicromapArray = geometry.opacityMicromapArrayVA;
-		geometryDesc_.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
-		geometryDesc_.OmmTriangles.pTriangles = &ommTriangles_;
-		geometryDesc_.OmmTriangles.pOmmLinkage = &ommLinkage_;
-	}
-
-	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
-	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-	inputs.Flags = kBLASBuildFlags;
-	inputs.NumDescs = 1;
-	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-	inputs.pGeometryDescs = &geometryDesc_;
-
+	const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = Inputs();
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
 	device_->GetRaytracingAccelerationStructurePrebuildInfo(inputs, prebuildInfo);
 
 	resultBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ResultDataMaxSizeInBytes, false);
 	resultSize_ = prebuildInfo.ResultDataMaxSizeInBytes;
 	scratchSize_ = prebuildInfo.ScratchDataSizeInBytes;
+}
+
+D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS D3D12BottomLevelAS::Inputs() const
+{
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
+	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+	inputs.Flags = kBLASBuildFlags;
+	inputs.NumDescs = static_cast<UINT>(geometryDescs_.size());
+	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+	inputs.pGeometryDescs = geometryDescs_.data();
+	return inputs;
 }
 
 D3D12BottomLevelAS::~D3D12BottomLevelAS() = default;
@@ -98,11 +111,7 @@ void D3D12BottomLevelAS::Build(D3D12CommandList *cmdList,
 							   D3D12_GPU_VIRTUAL_ADDRESS compactedSizeAddress)
 {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc = {};
-	desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-	desc.Inputs.Flags = kBLASBuildFlags;
-	desc.Inputs.NumDescs = 1;
-	desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-	desc.Inputs.pGeometryDescs = &geometryDesc_;
+	desc.Inputs = Inputs();
 	desc.DestAccelerationStructureData = resultBuffer_->GetResource()->GetGPUVirtualAddress();
 	desc.ScratchAccelerationStructureData = scratch;
 

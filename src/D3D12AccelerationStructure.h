@@ -21,15 +21,16 @@ struct BLASGeometryDesc
 	D3D12_GPU_VIRTUAL_ADDRESS opacityMicromapIndexBufferVA = 0;
 };
 
-// One BLAS per mesh. Rebuild-only (no refit/update) - appropriate for a static scene. Built with
-// compaction allowed, so it can shrink to its compacted size after the build.
+// A BLAS over one or more geometries (GeometryIndex() in HLSL is the position in the span). Rebuild-only
+// (no refit/update) - appropriate for a static scene. Built with compaction allowed, so it can shrink to
+// its compacted size after the build.
 class D3D12BottomLevelAS
 {
 public:
-	D3D12BottomLevelAS(D3D12Device *device, const BLASGeometryDesc &geometry);
+	D3D12BottomLevelAS(D3D12Device *device, std::span<const BLASGeometryDesc> geometries);
 	~D3D12BottomLevelAS();
 
-	// geometryDesc_ points into the object itself when it has opacity micromaps.
+	// geometryDescs_ point into the object itself when they have opacity micromaps.
 	D3D12BottomLevelAS(const D3D12BottomLevelAS &) = delete;
 	D3D12BottomLevelAS &operator=(const D3D12BottomLevelAS &) = delete;
 
@@ -66,9 +67,12 @@ private:
 	std::unique_ptr<D3D12Resource> scratchBuffer_;
 	uint64_t scratchSize_ = 0;
 	uint64_t resultSize_ = 0;
-	D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc_ = {};
-	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC ommTriangles_ = {}; // OMM_TRIANGLES geometry only
-	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC ommLinkage_ = {};
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS Inputs() const;
+
+	std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs_;
+	// Per geometry, read only by the OMM_TRIANGLES ones. Sized once, so the descs' pointers stay valid.
+	std::vector<D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC> ommTriangles_;
+	std::vector<D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC> ommLinkages_;
 };
 
 class D3D12OpacityMicromapArray
