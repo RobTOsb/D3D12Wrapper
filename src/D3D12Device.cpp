@@ -1,4 +1,5 @@
 #include "D3D12Device.h"
+#include "D3D12Aftermath.h"
 #include "D3D12Buffer.h"
 #include "D3D12Exception.h"
 #include "D3D12Resource.h"
@@ -89,6 +90,7 @@ void ReportDeviceRemoval()
 	if (FAILED(g_reportedDevice.As(&dred)))
 	{
 		loge("DRED: no data on this device");
+		Aftermath::WaitForGpuCrashDump();
 		fmtlog::poll(true);
 		return;
 	}
@@ -132,6 +134,8 @@ void ReportDeviceRemoval()
 		for (const D3D12_DRED_ALLOCATION_NODE1 *node = pageFault.pHeadRecentFreedAllocationNode; node != nullptr; node = node->pNext)
 			loge("DRED:   recently freed there: '{}' (type {})", ToUtf8(node->ObjectNameW), static_cast<int>(node->AllocationType));
 	}
+	// The driver writes the Aftermath dump after the removal is noticed; give it time before the app exits.
+	Aftermath::WaitForGpuCrashDump();
 	fmtlog::poll(true);
 }
 
@@ -212,6 +216,8 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 	HRESULT hr;
 
 	UINT dxgiFactoryFlags = 0;
+	// Watches only the devices made after it.
+	Aftermath::EnableGpuCrashDumps();
 	// In every build, without the debug layer too, so that a device removal can say where the GPU stopped
 	// (ReportDeviceRemoval). Must come before the device is made.
 	{
@@ -276,6 +282,7 @@ D3D12Device::D3D12Device(bool useSoftwareAdapter)
 		throw D3D12Exception("Failed to create D3D12 Device.", hr);
 	}
 	device_.As(&g_reportedDevice);
+	Aftermath::InitializeDevice(device_.Get());
 
 	D3D12_FEATURE_DATA_D3D12_OPTIONS16 options16 = {};
 	bool GPUUploadHeapSupported = false;

@@ -1,4 +1,5 @@
 #include "SlangCompiler.h"
+#include "D3D12Aftermath.h"
 
 #include <cstdint>
 #include <deque>
@@ -791,6 +792,7 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		}
 		LogDiagnostics(metaDiag);
 
+		Aftermath::RegisterShaderBinary(shader.bytecode.data(), shader.bytecode.size());
 		result.shaders.push_back(std::move(shader));
 		result.success = true;
 		return result;
@@ -827,6 +829,7 @@ ShaderCompilationResult SlangShaderCompiler::CompileShaderFromFile(const std::ws
 		}
 		LogDiagnostics(metaDiag);
 
+		Aftermath::RegisterShaderBinary(shader.bytecode.data(), shader.bytecode.size());
 		result.shaders.push_back(std::move(shader));
 	}
 
