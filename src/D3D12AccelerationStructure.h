@@ -59,6 +59,11 @@ public:
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;
+	// The buffer the BLAS lives in, which Compact replaces.
+	D3D12Resource *GetResource() const
+	{
+		return resultBuffer_.get();
+	}
 
 private:
 	D3D12Device *device_ = nullptr;

@@ -380,12 +380,36 @@ void D3D12CommandList::SetGlobalBarrier(D3D12_BARRIER_SYNC syncBefore,
 	SetBarriers(1, &g);
 }
 
+// RTV of one mip of a 2D texture, covering every slice of an array.
+static D3D12_RENDER_TARGET_VIEW_DESC MipRTVDesc(ID3D12Resource *resource, uint32_t mip)
+{
+	const D3D12_RESOURCE_DESC native = resource->GetDesc();
+	D3D12_RENDER_TARGET_VIEW_DESC desc = {};
+	desc.Format = native.Format;
+	if (native.DepthOrArraySize > 1)
+	{
+		desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+		desc.Texture2DArray.MipSlice = mip;
+		desc.Texture2DArray.ArraySize = native.DepthOrArraySize;
+	}
+	else
+	{
+		desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+		desc.Texture2D.MipSlice = mip;
+	}
+	return desc;
+}
+
 void D3D12CommandList::SetRenderTargets(uint32_t numRTVs,
 										D3D12Resource *const *rtvResources,
 										D3D12Resource *dsvResource,
-										bool readOnlyDSV)
+										bool readOnlyDSV,
+										const uint32_t *rtvMips,
+										uint32_t dsvMip)
 {
 	ID3D12Resource *nativeRTVResources[8] = {};
+	D3D12_RENDER_TARGET_VIEW_DESC rtvDescs[8] = {};
+	bool anyMip = false;
 	for (uint32_t i = 0; i < numRTVs; ++i)
 	{
 		if (rtvResources[i] == nullptr)
@@ -393,25 +417,32 @@ void D3D12CommandList::SetRenderTargets(uint32_t numRTVs,
 			break;
 		}
 		nativeRTVResources[i] = rtvResources[i]->GetResource();
+		const uint32_t mip = rtvMips ? rtvMips[i] : 0;
+		rtvDescs[i] = MipRTVDesc(nativeRTVResources[i], mip);
+		anyMip = anyMip || mip != 0;
 	}
 
+	// Without mips the default views are used, as before.
 	renderTargetHelper_.OMSetRenderTargets(commandList_.Get(),
 										   numRTVs,
 										   nativeRTVResources,
-										   nullptr,
+										   anyMip ? rtvDescs : nullptr,
 										   dsvResource ? dsvResource->GetResource() : nullptr,
 										   nullptr,
-										   readOnlyDSV);
+										   readOnlyDSV,
+										   dsvMip);
 }
 
 void D3D12CommandList::ClearRenderTarget(D3D12Resource *rtvResource,
 										 const float clearColour[4],
 										 uint32_t numRects,
-										 const D3D12Rect *rects)
+										 const D3D12Rect *rects,
+										 uint32_t mip)
 {
+	const D3D12_RENDER_TARGET_VIEW_DESC desc = MipRTVDesc(rtvResource->GetResource(), mip);
 	renderTargetHelper_.ClearRenderTargetView(commandList_.Get(),
 											  rtvResource->GetResource(),
-											  nullptr,
+											  mip != 0 ? &desc : nullptr,
 											  clearColour,
 											  numRects,
 											  rects);
@@ -422,7 +453,8 @@ void D3D12CommandList::ClearDepthStencil(D3D12Resource *dsvResource,
 										 float depth,
 										 uint8_t stencil,
 										 uint32_t numRects,
-										 const D3D12Rect *rects)
+										 const D3D12Rect *rects,
+										 uint32_t mip)
 {
 	renderTargetHelper_.ClearDepthStencilView(commandList_.Get(),
 											  dsvResource->GetResource(),
@@ -431,7 +463,8 @@ void D3D12CommandList::ClearDepthStencil(D3D12Resource *dsvResource,
 											  depth,
 											  stencil,
 											  numRects,
-											  rects);
+											  rects,
+											  mip);
 }
 
 void D3D12CommandList::ClearUnorderedAccessViewFloat(const D3D12DescriptorHeap *gpuDescriptorHeap,

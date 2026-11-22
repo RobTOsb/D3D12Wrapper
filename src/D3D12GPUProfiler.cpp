@@ -19,7 +19,7 @@ D3D12GPUProfiler::D3D12GPUProfiler(D3D12Device *device,
 								   uint32_t framesInFlight,
 								   uint32_t maxScopesPerFrame,
 								   uint32_t historyLength) :
-	maxQueriesPerFrame_(maxScopesPerFrame * 2), historyLength_((std::max) (historyLength, 1u)), frames_(framesInFlight)
+	maxQueriesPerFrame_(maxScopesPerFrame * 2), historyLength_(std::max(historyLength, 1u)), frames_(framesInFlight)
 {
 	const uint32_t queryCount = maxQueriesPerFrame_ * framesInFlight;
 

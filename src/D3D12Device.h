@@ -37,9 +37,11 @@ public:
 											  D3D12_HEAP_TYPE heapType,
 											  D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED);
 
+	// clearValue overrides the default optimized clear value (black, or depth 0) for RT/DS textures.
 	std::unique_ptr<D3D12Texture> CreateTexture(const D3D12_RESOURCE_DESC1 &desc,
 												D3D12_HEAP_TYPE heapType,
-												D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED);
+												D3D12_BARRIER_LAYOUT initialLayout = D3D12_BARRIER_LAYOUT_UNDEFINED,
+												const D3D12_CLEAR_VALUE *clearValue = nullptr);
 
 	void GetCopyableFootprints1(const D3D12_RESOURCE_DESC1 &desc,
 								UINT firstSubresource,

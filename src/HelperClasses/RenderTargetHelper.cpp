@@ -65,7 +65,8 @@ void RenderTargetHelper::OMSetRenderTargets(ID3D12GraphicsCommandList *pCommandL
 											const D3D12_RENDER_TARGET_VIEW_DESC *pRTVDescs,
 											ID3D12Resource *pDSVResource,
 											const D3D12_DEPTH_STENCIL_VIEW_DESC *pDSVDesc,
-											bool isReadOnlyDSV)
+											bool isReadOnlyDSV,
+											UINT DSVMipSlice)
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE CurrRTVHandle = m_RTVHandle;
 	for (DWORD i = 0; i < NumRenderTargets; ++i)
@@ -106,7 +107,7 @@ void RenderTargetHelper::OMSetRenderTargets(ID3D12GraphicsCommandList *pCommandL
 			{
 				dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 				dsvDesc.Flags = isReadOnlyDSV ? D3D12_DSV_FLAG_READ_ONLY_DEPTH : D3D12_DSV_FLAG_NONE;
-				dsvDesc.Texture2D.MipSlice = 0;
+				dsvDesc.Texture2D.MipSlice = DSVMipSlice;
 			}
 
 			pFinalDSVDesc = &dsvDesc;
@@ -137,7 +138,8 @@ void RenderTargetHelper::ClearDepthStencilView(ID3D12GraphicsCommandList *pComma
 											   FLOAT Depth,
 											   UINT8 Stencil,
 											   UINT NumRects,
-											   const D3D12_RECT *pRects)
+											   const D3D12_RECT *pRects,
+											   UINT MipSlice)
 {
 	// Handle typeless depth formats by providing explicit format if needed
 	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
@@ -167,7 +169,7 @@ void RenderTargetHelper::ClearDepthStencilView(ID3D12GraphicsCommandList *pComma
 		{
 			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 			dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-			dsvDesc.Texture2D.MipSlice = 0;
+			dsvDesc.Texture2D.MipSlice = MipSlice;
 		}
 
 		pFinalDSVDesc = &dsvDesc;

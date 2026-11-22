@@ -61,10 +61,13 @@ public:
 						  D3D12_BARRIER_SYNC syncAfter,
 						  D3D12_BARRIER_ACCESS accessAfter);
 
+	// Mips select the slice each view binds; null rtvMips binds mip 0 of every target.
 	void SetRenderTargets(uint32_t numRTVs,
 						  D3D12Resource *const *rtvResources,
 						  D3D12Resource *dsvResource,
-						  bool readOnlyDSV = false);
+						  bool readOnlyDSV = false,
+						  const uint32_t *rtvMips = nullptr,
+						  uint32_t dsvMip = 0);
 	void CopyResource(D3D12Resource *dstResource, D3D12Resource *srcResource);
 	void CopyBufferRegion(D3D12Resource *dstResource,
 						  uint64_t dstOffset,
@@ -93,14 +96,16 @@ public:
 	void ClearRenderTarget(D3D12Resource *rtvResource,
 						   const float clearColour[4],
 						   uint32_t numRects = 0,
-						   const D3D12Rect *rects = nullptr);
+						   const D3D12Rect *rects = nullptr,
+						   uint32_t mip = 0);
 
 	void ClearDepthStencil(D3D12Resource *dsvResource,
 						   D3D12_CLEAR_FLAGS clearFlags,
 						   float depth,
 						   uint8_t stencil,
 						   uint32_t numRects = 0,
-						   const D3D12Rect *rects = nullptr);
+						   const D3D12Rect *rects = nullptr,
+						   uint32_t mip = 0);
 	void ClearUnorderedAccessViewFloat(const D3D12DescriptorHeap *gpuDescriptorHeap,
 									   DescriptorHandle gpuUavHandle,
 									   const D3D12DescriptorHeap *cpuDescriptorHeap,

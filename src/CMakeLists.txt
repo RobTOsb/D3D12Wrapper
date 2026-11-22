@@ -23,7 +23,8 @@ target_precompile_headers(D3D12 PRIVATE pch.h)
 
 target_link_libraries(D3D12 PUBLIC Microsoft::DirectX-Headers mimalloc-static PRIVATE d3d12 d3d11 dxgi dxguid fmtlog::fmtlog_static slang::slang D3D12MemoryAllocator imgui)
 target_include_directories(D3D12 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/D3D12MemoryAllocator/include imgui)
-target_compile_definitions(D3D12 PRIVATE D3D12_AGILITY_SDK_VERSION=${AGILITY_SDK_VERSION_NUMBER})
+# windows.h comes in through the public headers, so consumers need its min/max macros kept away too.
+target_compile_definitions(D3D12 PUBLIC NOMINMAX PRIVATE D3D12_AGILITY_SDK_VERSION=${AGILITY_SDK_VERSION_NUMBER})
 
 # NVIDIA Nsight Aftermath GPU crash dumps (D3D12Aftermath.h). The SDK ships with Nsight Graphics; the newest
 # installed one is used unless AFTERMATH_SDK_DIR names another.

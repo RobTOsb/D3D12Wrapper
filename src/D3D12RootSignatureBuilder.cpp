@@ -329,7 +329,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 		}
 
 		const uint32_t requiredDwords = (sizeInBytes + 3) / 4;
-		rootConstantCount = (std::min) ((std::max) (kMinRootConstantCount, requiredDwords), kMaxRootConstantCount);
+		rootConstantCount = std::min(std::max(kMinRootConstantCount, requiredDwords), kMaxRootConstantCount);
 		hasRootConstants = true;
 		rootConstantsRegister = it->baseShaderRegister;
 		rootConstantsSpace = it->registerSpace;

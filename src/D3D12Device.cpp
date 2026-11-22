@@ -111,7 +111,7 @@ void ReportDeviceRemoval()
 				 done,
 				 node->BreadcrumbCount);
 			const UINT first = done > 12 ? done - 12 : 0;
-			const UINT last = (std::min)(node->BreadcrumbCount, done + 4);
+			const UINT last = std::min(node->BreadcrumbCount, done + 4);
 			for (UINT i = first; i < last; ++i)
 			{
 				std::string context;
@@ -634,7 +634,8 @@ std::unique_ptr<D3D12Buffer> D3D12Device::CreateBuffer(const D3D12_RESOURCE_DESC
 
 std::unique_ptr<D3D12Texture> D3D12Device::CreateTexture(const D3D12_RESOURCE_DESC1 &desc,
 														 D3D12_HEAP_TYPE heapType,
-														 D3D12_BARRIER_LAYOUT initialLayout)
+														 D3D12_BARRIER_LAYOUT initialLayout,
+														 const D3D12_CLEAR_VALUE *customClearValue)
 {
 	D3D12MA::ALLOCATION_DESC allocDesc = {};
 	allocDesc.HeapType = heapType;
@@ -646,7 +647,7 @@ std::unique_ptr<D3D12Texture> D3D12Device::CreateTexture(const D3D12_RESOURCE_DE
 	bool isRenderTarget = (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
 
 	D3D12_CLEAR_VALUE clearValue = {};
-	D3D12_CLEAR_VALUE *optimizedClearValue = nullptr;
+	const D3D12_CLEAR_VALUE *optimizedClearValue = nullptr;
 	if (isDepth)
 	{
 		if (desc.Format == DXGI_FORMAT_R32_TYPELESS)
@@ -674,6 +675,10 @@ std::unique_ptr<D3D12Texture> D3D12Device::CreateTexture(const D3D12_RESOURCE_DE
 		clearValue.Color[2] = 0.0f;
 		clearValue.Color[3] = 1.0f;
 		optimizedClearValue = &clearValue;
+	}
+	if (customClearValue && optimizedClearValue)
+	{
+		optimizedClearValue = customClearValue;
 	}
 
 	HRESULT hr = allocator_->CreateResource3(&allocDesc,

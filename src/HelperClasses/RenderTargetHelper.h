@@ -29,7 +29,8 @@ public:
 							const D3D12_RENDER_TARGET_VIEW_DESC *pRTVDescs,
 							ID3D12Resource *pDSVResource,
 							const D3D12_DEPTH_STENCIL_VIEW_DESC *pDSVDesc,
-							bool isReadOnlyDSV = false);
+							bool isReadOnlyDSV = false,
+							UINT DSVMipSlice = 0); // used when pDSVDesc is null
 
 	void ClearRenderTargetView(ID3D12GraphicsCommandList *pCommandList,
 							   ID3D12Resource *pRTVResource,
@@ -45,7 +46,8 @@ public:
 							   FLOAT Depth,
 							   UINT8 Stencil,
 							   UINT NumRects,
-							   const D3D12_RECT *pRects);
+							   const D3D12_RECT *pRects,
+							   UINT MipSlice = 0); // used when pDSVDesc is null
 
 private:
 	ID3D12Device *m_pDevice = NULL;

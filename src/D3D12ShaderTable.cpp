@@ -45,7 +45,7 @@ uint32_t D3D12ShaderTable::RecordSizeFor(const std::vector<PendingRecord> &recor
 	uint32_t maxLocalArgs = 0;
 	for (const auto &record: records)
 	{
-		maxLocalArgs = (std::max) (maxLocalArgs, static_cast<uint32_t>(record.localRootArguments.size()));
+		maxLocalArgs = std::max(maxLocalArgs, static_cast<uint32_t>(record.localRootArguments.size()));
 	}
 	const uint32_t unaligned = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + maxLocalArgs;
 	return AlignUp(unaligned, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
