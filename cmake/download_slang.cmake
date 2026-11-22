@@ -42,9 +42,8 @@ find_package(slang CONFIG REQUIRED
     PATHS "${slang_sdk_SOURCE_DIR}/cmake"
     NO_DEFAULT_PATH)
 
-# Directory holding slang.dll and its runtime companions (slang-glslang.dll, slang-llvm.dll,
-# ...). Consumers that link the D3D12 static library must copy these next to their executable;
-# d3d12_deploy_runtime_dlls() (defined in src/CMakeLists.txt) does that.
+# Directory holding slang.dll and slang-compiler.dll, which d3d12_deploy_runtime_dlls() copies
+# next to executables that link the D3D12 static library.
 set(SLANG_RUNTIME_DIR "${slang_sdk_SOURCE_DIR}/bin" CACHE INTERNAL "Slang runtime DLL directory")
 
 message(STATUS "Slang ${SLANG_VERSION} ready (runtime DLLs: ${SLANG_RUNTIME_DIR})")

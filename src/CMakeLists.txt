@@ -51,11 +51,16 @@ else()
     set(AFTERMATH_RUNTIME_DLL "" CACHE INTERNAL "")
 endif()
 
-# Slang and DXC next to the executable, and the Agility SDK runtime in the D3D12\ folder that
-# D3D12Device.cpp exports as D3D12SDKPath.
+# Copies only the runtime DLLs: Slang and DXC next to the executable, the Agility SDK in D3D12\.
+# Slang to DXIL needs just slang.dll and slang-compiler.dll, not the SDK's tools or other targets.
+set(SLANG_RUNTIME_DLLS
+    "${SLANG_RUNTIME_DIR}/slang.dll"
+    "${SLANG_RUNTIME_DIR}/slang-compiler.dll"
+    CACHE INTERNAL "Slang DLLs deployed next to executables")
+
 function(d3d12_deploy_runtime_dlls target)
     add_custom_command(TARGET ${target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${SLANG_RUNTIME_DIR}" "$<TARGET_FILE_DIR:${target}>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SLANG_RUNTIME_DLLS} "$<TARGET_FILE_DIR:${target}>"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${DXC_RUNTIME_DIR}/dxcompiler.dll"
             "${DXC_RUNTIME_DIR}/dxil.dll"
