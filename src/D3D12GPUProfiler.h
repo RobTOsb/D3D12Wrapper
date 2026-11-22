@@ -40,7 +40,11 @@ public:
 	D3D12GPUProfiler &operator=(const D3D12GPUProfiler &) = delete;
 
 	void BeginFrame(uint32_t frameIndex);
+	// Resolves what is left, unless commandList is null, and ends the frame.
 	void EndFrame(D3D12CommandList *commandList);
+	// Resolves the timestamps written since the last resolve. For a queue that submits several lists a frame,
+	// call it on each list before it closes; the frame's samples are read once all of them are resolved.
+	void Resolve(D3D12CommandList *commandList);
 
 	// Scopes may nest. Scopes beyond maxScopesPerFrame in one frame are dropped.
 	void BeginScope(D3D12CommandList *commandList, const std::string &name);
@@ -72,9 +76,9 @@ private:
 	{
 		std::vector<PendingScope> scopes;
 		uint32_t queriesUsed = 0;
+		uint32_t queriesResolved = 0; // from the start of the slot
 		uint32_t queriesReserved = 0; // two per begun scope, so a scope that begins can always end
 		uint64_t generation = 0; // frames recorded before the last Reset() are discarded
-		bool resolved = false;
 	};
 
 	uint32_t FirstQuery(uint32_t frameIndex) const

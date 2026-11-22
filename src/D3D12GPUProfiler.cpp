@@ -59,12 +59,13 @@ void D3D12GPUProfiler::BeginFrame(uint32_t frameIndex)
 	currentFrame_ = frameIndex;
 	FrameSlot &frame = frames_[currentFrame_];
 
-	if (frame.resolved && frame.generation == generation_)
+	if (frame.generation == generation_)
 	{
+		const uint32_t resolvedEnd = FirstQuery(currentFrame_) + frame.queriesResolved;
 		std::vector<bool> touched(scopes_.size(), false);
 		for (const PendingScope &pending: frame.scopes)
 		{
-			if (pending.endQuery == kNoQuery)
+			if (pending.endQuery == kNoQuery || pending.endQuery >= resolvedEnd)
 			{
 				continue;
 			}
@@ -87,30 +88,38 @@ void D3D12GPUProfiler::BeginFrame(uint32_t frameIndex)
 
 	frame.scopes.clear();
 	frame.queriesUsed = 0;
+	frame.queriesResolved = 0;
 	frame.queriesReserved = 0;
 	frame.generation = generation_;
-	frame.resolved = false;
 	openScopes_.clear();
 	inFrame_ = true;
 }
 
-void D3D12GPUProfiler::EndFrame(D3D12CommandList *commandList)
+void D3D12GPUProfiler::Resolve(D3D12CommandList *commandList)
 {
 	FrameSlot &frame = frames_[currentFrame_];
-
-	if (inFrame_ && frame.queriesUsed > 0)
+	if (!inFrame_ || frame.queriesUsed == frame.queriesResolved)
 	{
-		const uint32_t firstQuery = FirstQuery(currentFrame_);
-		commandList->ResolveQueryData(queryHeap_.Get(),
-									  D3D12_QUERY_TYPE_TIMESTAMP,
-									  firstQuery,
-									  frame.queriesUsed,
-									  readbackBuffer_.get(),
-									  (uint64_t) firstQuery * sizeof(uint64_t));
-		frame.resolved = true;
+		return;
+	}
+	const uint32_t firstQuery = FirstQuery(currentFrame_) + frame.queriesResolved;
+	commandList->ResolveQueryData(queryHeap_.Get(),
+								  D3D12_QUERY_TYPE_TIMESTAMP,
+								  firstQuery,
+								  frame.queriesUsed - frame.queriesResolved,
+								  readbackBuffer_.get(),
+								  (uint64_t) firstQuery * sizeof(uint64_t));
+	frame.queriesResolved = frame.queriesUsed;
+}
+
+void D3D12GPUProfiler::EndFrame(D3D12CommandList *commandList)
+{
+	if (commandList)
+	{
+		Resolve(commandList);
 	}
 
-	// Anything still open has no end timestamp; BeginFrame skips it.
+	// Anything still open has no end timestamp, and anything unresolved no data; BeginFrame skips both.
 	openScopes_.clear();
 	inFrame_ = false;
 }

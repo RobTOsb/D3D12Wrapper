@@ -263,9 +263,8 @@ D3D12TopLevelAS::D3D12TopLevelAS(D3D12Device *device, std::span<const TLASInstan
 
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
 	device_->GetRaytracingAccelerationStructurePrebuildInfo(inputs, prebuildInfo);
-
-	resultBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ResultDataMaxSizeInBytes, false);
-	scratchBuffer_ = device_->CreateAccelerationStructureBuffer(prebuildInfo.ScratchDataSizeInBytes, true);
+	resultSize_ = prebuildInfo.ResultDataMaxSizeInBytes;
+	scratchSize_ = prebuildInfo.ScratchDataSizeInBytes;
 
 	instanceBuffer_ = CreateInstanceBuffer(instances);
 	buildInstances_ = instanceBuffer_.get();
@@ -317,7 +316,26 @@ void D3D12TopLevelAS::SetInstances(std::span<const TLASInstanceDesc> instances, 
 
 D3D12TopLevelAS::~D3D12TopLevelAS() = default;
 
+void D3D12TopLevelAS::CreateBuffers() const
+{
+	if (resultBuffer_ == nullptr)
+	{
+		resultBuffer_ = device_->CreateAccelerationStructureBuffer(resultSize_, false);
+		scratchBuffer_ = device_->CreateAccelerationStructureBuffer(scratchSize_, true);
+	}
+}
+
 void D3D12TopLevelAS::Build(D3D12CommandList *cmdList)
+{
+	CreateBuffers();
+	Build(cmdList,
+		  resultBuffer_->GetResource()->GetGPUVirtualAddress(),
+		  scratchBuffer_->GetResource()->GetGPUVirtualAddress());
+}
+
+void D3D12TopLevelAS::Build(D3D12CommandList *cmdList,
+							D3D12_GPU_VIRTUAL_ADDRESS destination,
+							D3D12_GPU_VIRTUAL_ADDRESS scratch)
 {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc = {};
 	desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -325,13 +343,14 @@ void D3D12TopLevelAS::Build(D3D12CommandList *cmdList)
 	desc.Inputs.NumDescs = instanceCount_;
 	desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 	desc.Inputs.InstanceDescs = buildInstances_->GetResource()->GetGPUVirtualAddress();
-	desc.DestAccelerationStructureData = resultBuffer_->GetResource()->GetGPUVirtualAddress();
-	desc.ScratchAccelerationStructureData = scratchBuffer_->GetResource()->GetGPUVirtualAddress();
+	desc.DestAccelerationStructureData = destination;
+	desc.ScratchAccelerationStructureData = scratch;
 
 	cmdList->BuildRaytracingAccelerationStructure(desc);
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS D3D12TopLevelAS::GetGPUVirtualAddress() const
 {
+	CreateBuffers();
 	return resultBuffer_->GetResource()->GetGPUVirtualAddress();
 }

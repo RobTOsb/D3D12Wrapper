@@ -142,6 +142,16 @@ public:
 	~D3D12TopLevelAS();
 
 	void Build(D3D12CommandList *cmdList); // builds from the instances last given
+	// Builds into buffers owned elsewhere, such as render graph transients, sized by the two getters below.
+	void Build(D3D12CommandList *cmdList, D3D12_GPU_VIRTUAL_ADDRESS destination, D3D12_GPU_VIRTUAL_ADDRESS scratch);
+	uint64_t GetResultSize() const
+	{
+		return resultSize_;
+	}
+	uint64_t GetScratchSize() const
+	{
+		return scratchSize_;
+	}
 
 	// Replaces the instances, as many as at creation, for the next Build. They go to the instance
 	// buffer of frame frameIndex, one of frameCount, so a build of a frame still on the GPU keeps
@@ -151,15 +161,20 @@ public:
 	D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;
 	D3D12Resource *GetResource() const
 	{
+		CreateBuffers();
 		return resultBuffer_.get();
 	}
 
 private:
 	std::unique_ptr<D3D12Buffer> CreateInstanceBuffer(std::span<const TLASInstanceDesc> instances) const;
+	// The TLAS's own result and scratch, made on first use so one built only into other buffers has none.
+	void CreateBuffers() const;
 
 	D3D12Device *device_ = nullptr;
-	std::unique_ptr<D3D12Resource> resultBuffer_;
-	std::unique_ptr<D3D12Resource> scratchBuffer_;
+	uint64_t resultSize_ = 0;
+	uint64_t scratchSize_ = 0;
+	mutable std::unique_ptr<D3D12Resource> resultBuffer_;
+	mutable std::unique_ptr<D3D12Resource> scratchBuffer_;
 	std::unique_ptr<D3D12Resource> instanceBuffer_; // upload-heap D3D12_RAYTRACING_INSTANCE_DESC array
 	std::vector<std::unique_ptr<D3D12Buffer>> frameInstanceBuffers_; // per frame in flight, made by SetInstances
 	D3D12Resource *buildInstances_ = nullptr; // the instance buffer Build reads
