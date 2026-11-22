@@ -20,6 +20,8 @@ D3D12ImguiRenderer::D3D12ImguiRenderer(D3D12Device *device,
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 	ImGui::Spectrum::StyleColorsSpectrum();
+	// Spectrum's tick is hard to see on its dark checkbox frame, so draw it white.
+	ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	// Allocate a dedicated descriptor slot for ImGui's font texture SRV.
 	fontDescriptorHandle_ = globalDescriptorHeap->AllocateDescriptor();
 	CPUDescriptorHandle cpuHandle = globalDescriptorHeap->GetCPUDescriptorHandle(fontDescriptorHandle_);
