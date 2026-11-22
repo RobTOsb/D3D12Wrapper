@@ -15,11 +15,11 @@ namespace
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
 
-	void WriteInstanceDescs(std::span<const TLASInstanceDesc> instances, D3D12_RAYTRACING_INSTANCE_DESC *dst)
+	void WriteInstanceDescs(std::span<const D3D12TLASInstanceDesc> instances, D3D12_RAYTRACING_INSTANCE_DESC *dst)
 	{
 		for (size_t i = 0; i < instances.size(); ++i)
 		{
-			const TLASInstanceDesc &src = instances[i];
+			const D3D12TLASInstanceDesc &src = instances[i];
 			D3D12_RAYTRACING_INSTANCE_DESC &out = dst[i];
 			std::memcpy(out.Transform, src.transform, sizeof(out.Transform));
 			out.InstanceID = src.instanceID;
@@ -31,7 +31,7 @@ namespace
 	}
 }
 
-D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, std::span<const BLASGeometryDesc> geometries)
+D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, std::span<const D3D12BLASGeometryDesc> geometries)
 	: device_(device)
 {
 	geometryDescs_.resize(geometries.size());
@@ -39,7 +39,7 @@ D3D12BottomLevelAS::D3D12BottomLevelAS(D3D12Device *device, std::span<const BLAS
 	ommLinkages_.resize(geometries.size());
 	for (size_t i = 0; i < geometries.size(); ++i)
 	{
-		const BLASGeometryDesc &geometry = geometries[i];
+		const D3D12BLASGeometryDesc &geometry = geometries[i];
 		D3D12_RAYTRACING_GEOMETRY_DESC &desc = geometryDescs_[i];
 		desc = {};
 		desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -251,7 +251,7 @@ D3D12_GPU_VIRTUAL_ADDRESS D3D12OpacityMicromapArray::GetGPUVirtualAddress() cons
 	return resultBuffer_->GetResource()->GetGPUVirtualAddress();
 }
 
-D3D12TopLevelAS::D3D12TopLevelAS(D3D12Device *device, std::span<const TLASInstanceDesc> instances)
+D3D12TopLevelAS::D3D12TopLevelAS(D3D12Device *device, std::span<const D3D12TLASInstanceDesc> instances)
 	: device_(device)
 	, instanceCount_(static_cast<uint32_t>(instances.size()))
 {
@@ -270,7 +270,7 @@ D3D12TopLevelAS::D3D12TopLevelAS(D3D12Device *device, std::span<const TLASInstan
 	buildInstances_ = instanceBuffer_.get();
 }
 
-std::unique_ptr<D3D12Buffer> D3D12TopLevelAS::CreateInstanceBuffer(std::span<const TLASInstanceDesc> instances) const
+std::unique_ptr<D3D12Buffer> D3D12TopLevelAS::CreateInstanceBuffer(std::span<const D3D12TLASInstanceDesc> instances) const
 {
 	const uint64_t instanceBufferSize = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * instanceCount_;
 
@@ -295,7 +295,7 @@ std::unique_ptr<D3D12Buffer> D3D12TopLevelAS::CreateInstanceBuffer(std::span<con
 	return instanceUpload;
 }
 
-void D3D12TopLevelAS::SetInstances(std::span<const TLASInstanceDesc> instances, uint32_t frameIndex, uint32_t frameCount)
+void D3D12TopLevelAS::SetInstances(std::span<const D3D12TLASInstanceDesc> instances, uint32_t frameIndex, uint32_t frameCount)
 {
 	if (instances.size() != instanceCount_)
 	{

@@ -6,9 +6,9 @@ class D3D12Device;
 class D3D12RaytracingPipeline;
 class D3D12Buffer;
 
-struct ShaderTableRecord
+struct D3D12ShaderTableRecord
 {
-	std::wstring exportName; // must match an export/hit-group name from RaytracingPipelineCreateInfo
+	std::wstring exportName; // must match an export/hit-group name from D3D12RaytracingPipelineCreateInfo
 	std::vector<uint8_t> localRootArguments; // empty if the export has no local root signature
 };
 
@@ -23,9 +23,9 @@ public:
 	D3D12ShaderTable(D3D12Device *device, D3D12RaytracingPipeline *pipeline);
 	~D3D12ShaderTable();
 
-	uint32_t AddRayGenRecord(const ShaderTableRecord &record);
-	uint32_t AddMissRecord(const ShaderTableRecord &record);
-	uint32_t AddHitGroupRecord(const ShaderTableRecord &record);
+	uint32_t AddRayGenRecord(const D3D12ShaderTableRecord &record);
+	uint32_t AddMissRecord(const D3D12ShaderTableRecord &record);
+	uint32_t AddHitGroupRecord(const D3D12ShaderTableRecord &record);
 
 	// Uploads all pending records into one GPU buffer with correct per-table alignment. Must be
 	// called once after all Add*Record calls and before reading the ranges below.

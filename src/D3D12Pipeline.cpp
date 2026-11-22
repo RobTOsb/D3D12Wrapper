@@ -32,7 +32,7 @@ D3D12GraphicsPipeline &D3D12GraphicsPipeline::BuildRootSignatureFromShader(const
 	return *this;
 }
 
-void D3D12GraphicsPipeline::BuildGraphicsPipeline(const GraphicsPipelineCreateInfo &pipelineInfo,
+void D3D12GraphicsPipeline::BuildGraphicsPipeline(const D3D12GraphicsPipelineCreateInfo &pipelineInfo,
 												  const ShaderCompilationResult &compileResult)
 {
 	if (!rootSignature_)
@@ -167,7 +167,7 @@ struct MeshShaderPipelineStateStream
 	CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopologyType;
 };
 
-void D3D12GraphicsPipeline::BuildMeshShaderPipeline(const GraphicsPipelineCreateInfo &pipelineInfo,
+void D3D12GraphicsPipeline::BuildMeshShaderPipeline(const D3D12GraphicsPipelineCreateInfo &pipelineInfo,
 													const ShaderCompilationResult &compileResult)
 {
 	if (!rootSignature_)
@@ -361,7 +361,7 @@ D3D12RaytracingPipeline &D3D12RaytracingPipeline::SetGlobalRootSignature(
 	return *this;
 }
 
-void D3D12RaytracingPipeline::BuildRaytracingPipeline(const RaytracingPipelineCreateInfo &pipelineInfo,
+void D3D12RaytracingPipeline::BuildRaytracingPipeline(const D3D12RaytracingPipelineCreateInfo &pipelineInfo,
 													  const ShaderCompilationResult &compileResult)
 {
 	if (!rootSignature_)

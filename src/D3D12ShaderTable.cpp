@@ -22,19 +22,19 @@ D3D12ShaderTable::D3D12ShaderTable(D3D12Device *device, D3D12RaytracingPipeline 
 
 D3D12ShaderTable::~D3D12ShaderTable() = default;
 
-uint32_t D3D12ShaderTable::AddRayGenRecord(const ShaderTableRecord &record)
+uint32_t D3D12ShaderTable::AddRayGenRecord(const D3D12ShaderTableRecord &record)
 {
 	rayGenRecords_.push_back(PendingRecord{ record.exportName, record.localRootArguments });
 	return static_cast<uint32_t>(rayGenRecords_.size() - 1);
 }
 
-uint32_t D3D12ShaderTable::AddMissRecord(const ShaderTableRecord &record)
+uint32_t D3D12ShaderTable::AddMissRecord(const D3D12ShaderTableRecord &record)
 {
 	missRecords_.push_back(PendingRecord{ record.exportName, record.localRootArguments });
 	return static_cast<uint32_t>(missRecords_.size() - 1);
 }
 
-uint32_t D3D12ShaderTable::AddHitGroupRecord(const ShaderTableRecord &record)
+uint32_t D3D12ShaderTable::AddHitGroupRecord(const D3D12ShaderTableRecord &record)
 {
 	hitGroupRecords_.push_back(PendingRecord{ record.exportName, record.localRootArguments });
 	return static_cast<uint32_t>(hitGroupRecords_.size() - 1);

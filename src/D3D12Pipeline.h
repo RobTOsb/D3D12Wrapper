@@ -19,7 +19,7 @@ enum class D3D12PrimitiveTopology : uint32_t
 	PATCH_LIST
 };
 
-enum class PipelineType : uint32_t
+enum class D3D12PipelineType : uint32_t
 {
 	GRAPHICS_VERTEX, // Traditional vertex + pixel shader pipeline
 	GRAPHICS_MESH, // Modern mesh + amplification shader pipeline
@@ -27,7 +27,7 @@ enum class PipelineType : uint32_t
 	RAYTRACING
 };
 
-struct InputElement
+struct D3D12InputElement
 {
 	const char *semanticName;
 	uint32_t semanticIndex;
@@ -38,7 +38,7 @@ struct InputElement
 	uint32_t instanceDataStepRate;
 };
 
-struct RasterizerStateDesc
+struct D3D12RasterizerStateDesc
 {
 	D3D12_FILL_MODE fillMode = D3D12_FILL_MODE_SOLID;
 	D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
@@ -50,13 +50,13 @@ struct RasterizerStateDesc
 	BOOL multisampleEnable = FALSE;
 	BOOL antialiasedLineEnable = FALSE;
 
-	static RasterizerStateDesc Default()
+	static D3D12RasterizerStateDesc Default()
 	{
-		return RasterizerStateDesc{};
+		return D3D12RasterizerStateDesc{};
 	}
 };
 
-struct BlendStateDesc
+struct D3D12BlendStateDesc
 {
 	BOOL alphaToCoverageEnable = FALSE;
 	BOOL independentBlendEnable = FALSE;
@@ -74,9 +74,9 @@ struct BlendStateDesc
 	};
 	std::vector<D3D12_RENDER_TARGET_BLEND_DESC> rtBlends;
 
-	static BlendStateDesc OpaqueDefault()
+	static D3D12BlendStateDesc OpaqueDefault()
 	{
-		BlendStateDesc desc;
+		D3D12BlendStateDesc desc;
 
 		D3D12_RENDER_TARGET_BLEND_DESC rtBlend = {};
 		rtBlend.BlendEnable = FALSE;
@@ -93,9 +93,9 @@ struct BlendStateDesc
 		return desc;
 	}
 
-	static BlendStateDesc AlphaBlend()
+	static D3D12BlendStateDesc AlphaBlend()
 	{
-		BlendStateDesc desc;
+		D3D12BlendStateDesc desc;
 		D3D12_RENDER_TARGET_BLEND_DESC rtBlend = {};
 		rtBlend.BlendEnable = TRUE;
 		rtBlend.LogicOpEnable = FALSE;
@@ -115,9 +115,9 @@ struct BlendStateDesc
 	// RTV[0] (accum R16G16B16A16_FLOAT): additive ONE/ONE for both colour and alpha channels.
 	// RTV[1] (reveal R16_FLOAT): product-of-(1-alpha): shader writes (1-alpha) to src.r,
 	//   so use ZERO/SRC_COLOR so dst.r = dst.r * src.r = dst.r * (1-alpha).
-	static BlendStateDesc WBOITBlend()
+	static D3D12BlendStateDesc WBOITBlend()
 	{
-		BlendStateDesc desc;
+		D3D12BlendStateDesc desc;
 		desc.alphaToCoverageEnable = FALSE;
 		desc.independentBlendEnable = TRUE;
 
@@ -154,7 +154,7 @@ struct BlendStateDesc
 	}
 };
 
-struct StencilOpDesc
+struct D3D12StencilOpDesc
 {
 	D3D12_STENCIL_OP stencilFailOp = D3D12_STENCIL_OP_KEEP;
 	D3D12_STENCIL_OP stencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
@@ -162,7 +162,7 @@ struct StencilOpDesc
 	D3D12_COMPARISON_FUNC stencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 };
 
-struct DepthStencilStateDesc
+struct D3D12DepthStencilStateDesc
 {
 	BOOL depthEnable = TRUE;
 	D3D12_DEPTH_WRITE_MASK depthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
@@ -170,35 +170,35 @@ struct DepthStencilStateDesc
 	BOOL stencilEnable = FALSE;
 	uint8_t stencilReadMask = 0xFF;
 	uint8_t stencilWriteMask = 0xFF;
-	StencilOpDesc frontFace;
-	StencilOpDesc backFace;
+	D3D12StencilOpDesc frontFace;
+	D3D12StencilOpDesc backFace;
 
-	static DepthStencilStateDesc Default()
+	static D3D12DepthStencilStateDesc Default()
 	{
-		return DepthStencilStateDesc{};
+		return D3D12DepthStencilStateDesc{};
 	}
 
-	static DepthStencilStateDesc ReversedZ()
+	static D3D12DepthStencilStateDesc ReversedZ()
 	{
-		DepthStencilStateDesc desc;
+		D3D12DepthStencilStateDesc desc;
 		desc.depthFunc = D3D12_COMPARISON_FUNC_GREATER;
 		return desc;
 	}
 };
 
-struct GraphicsPipelineCreateInfo
+struct D3D12GraphicsPipelineCreateInfo
 {
-	PipelineType pipelineType = PipelineType::GRAPHICS_VERTEX;
+	D3D12PipelineType pipelineType = D3D12PipelineType::GRAPHICS_VERTEX;
 
 	// Rasterizer state
-	RasterizerStateDesc rasterizerState;
+	D3D12RasterizerStateDesc rasterizerState;
 
 	// Depth stencil state
-	DepthStencilStateDesc depthStencilState;
+	D3D12DepthStencilStateDesc depthStencilState;
 	// Blend state
-	BlendStateDesc blendState;
+	D3D12BlendStateDesc blendState;
 	// Input layout (only for vertex shader pipeline)
-	std::vector<InputElement> inputElements;
+	std::vector<D3D12InputElement> inputElements;
 	// Render target formats
 	std::vector<DXGI_FORMAT> rtvFormats;
 	DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN;
@@ -217,7 +217,7 @@ public:
 	~D3D12GraphicsPipeline() = default;
 
 	D3D12GraphicsPipeline &BuildRootSignatureFromShader(const ShaderCompilationResult &compileResult);
-	void BuildGraphicsPipeline(const GraphicsPipelineCreateInfo &pipelineInfo,
+	void BuildGraphicsPipeline(const D3D12GraphicsPipelineCreateInfo &pipelineInfo,
 							   const ShaderCompilationResult &compileResult);
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetNativeRootSignature() const
@@ -229,19 +229,19 @@ public:
 		return pipelineState_;
 	}
 
-	const ReflectedRootSignature &GetReflectedRootSignature() const
+	const D3D12ReflectedRootSignature &GetReflectedRootSignature() const
 	{
 		return reflectedRootSignature_;
 	}
 
 private:
-	void BuildMeshShaderPipeline(const GraphicsPipelineCreateInfo &pipelineInfo,
+	void BuildMeshShaderPipeline(const D3D12GraphicsPipelineCreateInfo &pipelineInfo,
 								 const ShaderCompilationResult &compileResult);
 
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-	ReflectedRootSignature reflectedRootSignature_;
+	D3D12ReflectedRootSignature reflectedRootSignature_;
 };
 
 class D3D12ComputePipeline
@@ -262,7 +262,7 @@ public:
 		return pipelineState_;
 	}
 
-	const ReflectedRootSignature &GetReflectedRootSignature() const
+	const D3D12ReflectedRootSignature &GetReflectedRootSignature() const
 	{
 		return reflectedRootSignature_;
 	}
@@ -271,10 +271,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Device> device_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-	ReflectedRootSignature reflectedRootSignature_;
+	D3D12ReflectedRootSignature reflectedRootSignature_;
 };
 
-struct RaytracingHitGroupDesc
+struct D3D12RaytracingHitGroupDesc
 {
 	std::wstring hitGroupExport;
 	std::wstring closestHitExport;
@@ -283,24 +283,24 @@ struct RaytracingHitGroupDesc
 	D3D12_HIT_GROUP_TYPE type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
 };
 
-struct RaytracingLocalRootSignatureAssociation
+struct D3D12RaytracingLocalRootSignatureAssociation
 {
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> localRootSignature;
 	std::vector<std::wstring> exports;
 };
 
-struct RaytracingPipelineCreateInfo
+struct D3D12RaytracingPipelineCreateInfo
 {
 	std::vector<std::wstring> exports;
 
-	std::vector<RaytracingHitGroupDesc> hitGroups;
+	std::vector<D3D12RaytracingHitGroupDesc> hitGroups;
 
 	uint32_t maxPayloadSizeInBytes = 0;
 	uint32_t maxAttributeSizeInBytes = 8; // Default: built-in triangle attributes (barycentrics)
 	uint32_t maxTraceRecursionDepth = 1;
 	bool allowOpacityMicromaps = false;
 
-	std::vector<RaytracingLocalRootSignatureAssociation> localRootSignatures;
+	std::vector<D3D12RaytracingLocalRootSignatureAssociation> localRootSignatures;
 };
 
 class D3D12RaytracingPipeline
@@ -313,7 +313,7 @@ public:
 
 	D3D12RaytracingPipeline &SetGlobalRootSignature(Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature);
 
-	void BuildRaytracingPipeline(const RaytracingPipelineCreateInfo &pipelineInfo,
+	void BuildRaytracingPipeline(const D3D12RaytracingPipelineCreateInfo &pipelineInfo,
 								 const ShaderCompilationResult &compileResult);
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> GetNativeRootSignature() const
@@ -329,7 +329,7 @@ public:
 		return stateObjectProperties_;
 	}
 
-	const ReflectedRootSignature &GetReflectedRootSignature() const
+	const D3D12ReflectedRootSignature &GetReflectedRootSignature() const
 	{
 		return reflectedRootSignature_;
 	}
@@ -339,5 +339,5 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12StateObject> stateObject_;
 	Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> stateObjectProperties_;
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-	ReflectedRootSignature reflectedRootSignature_;
+	D3D12ReflectedRootSignature reflectedRootSignature_;
 };

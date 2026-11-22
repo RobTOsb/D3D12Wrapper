@@ -56,7 +56,7 @@ void D3D12CommandQueue::ExecuteCommandLists(D3D12CommandList **commandLists, uin
 	commandQueue_->ExecuteCommandLists(static_cast<UINT>(nativeCommandLists.size()), nativeCommandLists.data());
 }
 
-void D3D12CommandQueue::ExecuteCommandLists(D3D12CommandList **commandLists, uint32_t count, const SubmitSyncInfo &syncInfo)
+void D3D12CommandQueue::ExecuteCommandLists(D3D12CommandList **commandLists, uint32_t count, const D3D12SubmitSyncInfo &syncInfo)
 {
 	// Wait for any prerequisite GPU work if specified
 	if (syncInfo.fence && syncInfo.waitValues)

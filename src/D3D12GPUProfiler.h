@@ -9,7 +9,7 @@ class D3D12CommandList;
 class D3D12CommandQueue;
 class D3D12Device;
 
-struct GPUProfileScopeStats
+struct D3D12GPUProfileScopeStats
 {
 	std::string name;
 	float lastMs = 0.0f;
@@ -51,8 +51,8 @@ public:
 	void EndScope(D3D12CommandList *commandList);
 
 	// Null until the scope has at least one sample.
-	const GPUProfileScopeStats *FindStats(const std::string &name) const;
-	std::vector<GPUProfileScopeStats> GetAllStats() const;
+	const D3D12GPUProfileScopeStats *FindStats(const std::string &name) const;
+	std::vector<D3D12GPUProfileScopeStats> GetAllStats() const;
 
 	// Drops every sample collected so far, including frames still in flight.
 	void Reset();
@@ -60,7 +60,7 @@ public:
 private:
 	struct Scope
 	{
-		GPUProfileScopeStats stats;
+		D3D12GPUProfileScopeStats stats;
 		std::vector<float> samples; // ring buffer, ms
 		uint32_t nextSample = 0;
 	};

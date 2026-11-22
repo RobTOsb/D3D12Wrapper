@@ -7,7 +7,7 @@ class D3D12CommandList;
 class D3D12Resource;
 class D3D12Buffer;
 
-struct BLASGeometryDesc
+struct D3D12BLASGeometryDesc
 {
 	D3D12_GPU_VIRTUAL_ADDRESS vertexBufferVA = 0;
 	uint32_t vertexCount = 0;
@@ -27,7 +27,7 @@ struct BLASGeometryDesc
 class D3D12BottomLevelAS
 {
 public:
-	D3D12BottomLevelAS(D3D12Device *device, std::span<const BLASGeometryDesc> geometries);
+	D3D12BottomLevelAS(D3D12Device *device, std::span<const D3D12BLASGeometryDesc> geometries);
 	~D3D12BottomLevelAS();
 
 	// geometryDescs_ point into the object itself when they have opacity micromaps.
@@ -124,7 +124,7 @@ private:
 	uint64_t resultSize_ = 0;
 };
 
-struct TLASInstanceDesc
+struct D3D12TLASInstanceDesc
 {
 	D3D12_GPU_VIRTUAL_ADDRESS blasAddress = 0;
 	float transform[3][4] = {}; // row-major 3x4, matches D3D12_RAYTRACING_INSTANCE_DESC::Transform
@@ -138,7 +138,7 @@ struct TLASInstanceDesc
 class D3D12TopLevelAS
 {
 public:
-	D3D12TopLevelAS(D3D12Device *device, std::span<const TLASInstanceDesc> instances);
+	D3D12TopLevelAS(D3D12Device *device, std::span<const D3D12TLASInstanceDesc> instances);
 	~D3D12TopLevelAS();
 
 	void Build(D3D12CommandList *cmdList); // builds from the instances last given
@@ -156,7 +156,7 @@ public:
 	// Replaces the instances, as many as at creation, for the next Build. They go to the instance
 	// buffer of frame frameIndex, one of frameCount, so a build of a frame still on the GPU keeps
 	// reading its own.
-	void SetInstances(std::span<const TLASInstanceDesc> instances, uint32_t frameIndex, uint32_t frameCount);
+	void SetInstances(std::span<const D3D12TLASInstanceDesc> instances, uint32_t frameIndex, uint32_t frameCount);
 
 	D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;
 	D3D12Resource *GetResource() const
@@ -166,7 +166,7 @@ public:
 	}
 
 private:
-	std::unique_ptr<D3D12Buffer> CreateInstanceBuffer(std::span<const TLASInstanceDesc> instances) const;
+	std::unique_ptr<D3D12Buffer> CreateInstanceBuffer(std::span<const D3D12TLASInstanceDesc> instances) const;
 	// The TLAS's own result and scratch, made on first use so one built only into other buffers has none.
 	void CreateBuffers() const;
 

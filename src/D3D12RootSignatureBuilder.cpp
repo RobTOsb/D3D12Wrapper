@@ -125,20 +125,20 @@ namespace
 		return 0;
 	}
 
-	void AddScalarsFromConstantBuffer(const ReflectedConstantBuffer &cbuffer, std::vector<ReflectedScalar> &outScalars)
+	void AddScalarsFromConstantBuffer(const ReflectedConstantBuffer &cbuffer, std::vector<D3D12ReflectedScalar> &outScalars)
 	{
 		for (const auto &variable: cbuffer.variables)
 		{
 			const bool alreadyKnown =
 					std::any_of(outScalars.begin(),
 								outScalars.end(),
-								[&](const ReflectedScalar &scalar) { return scalar.name == variable.name; });
+								[&](const D3D12ReflectedScalar &scalar) { return scalar.name == variable.name; });
 			if (alreadyKnown)
 			{
 				continue;
 			}
 
-			ReflectedScalar scalar;
+			D3D12ReflectedScalar scalar;
 			scalar.name = variable.name;
 			scalar.cbufferName = cbuffer.name;
 			scalar.byteOffset = variable.byteOffset;
@@ -149,7 +149,7 @@ namespace
 	}
 
 	// Walks every compiled stage and collects every variable in every reflected cbuffer, by name.
-	void CollectScalars(const ShaderCompilationResult &compileResult, std::vector<ReflectedScalar> &outScalars)
+	void CollectScalars(const ShaderCompilationResult &compileResult, std::vector<D3D12ReflectedScalar> &outScalars)
 	{
 		for (const auto &shader: compileResult.shaders)
 		{
@@ -272,7 +272,7 @@ namespace
 	}
 } // namespace
 
-ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
+D3D12ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 														const ShaderCompilationResult &compileResult,
 														bool forRaytracing)
 {
@@ -303,7 +303,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 			 binding.bindCount);
 	}
 
-	ReflectedRootSignature result;
+	D3D12ReflectedRootSignature result;
 	CollectScalars(compileResult, result.scalars);
 
 	bool hasRootConstants = false;
@@ -391,7 +391,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 			continue;
 		}
 
-		ReflectedRootBinding record;
+		D3D12ReflectedRootBinding record;
 		record.type = binding.rangeType;
 		record.registerSpace = binding.registerSpace;
 		record.baseShaderRegister = binding.baseShaderRegister;
@@ -512,7 +512,7 @@ ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRootSignatureForShader(ID3D12Device *device,
 																		 const ShaderCompilationResult &compileResult,
 																		 bool forRaytracing,
-																		 ReflectedRootSignature &outReflected)
+																		 D3D12ReflectedRootSignature &outReflected)
 {
 	outReflected = {};
 

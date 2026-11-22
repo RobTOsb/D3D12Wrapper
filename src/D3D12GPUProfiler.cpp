@@ -162,7 +162,7 @@ void D3D12GPUProfiler::EndScope(D3D12CommandList *commandList)
 	frame.scopes[pendingIndex].endQuery = query;
 }
 
-const GPUProfileScopeStats *D3D12GPUProfiler::FindStats(const std::string &name) const
+const D3D12GPUProfileScopeStats *D3D12GPUProfiler::FindStats(const std::string &name) const
 {
 	const auto it = scopeLookup_.find(name);
 	if (it == scopeLookup_.end() || scopes_[it->second].samples.empty())
@@ -172,9 +172,9 @@ const GPUProfileScopeStats *D3D12GPUProfiler::FindStats(const std::string &name)
 	return &scopes_[it->second].stats;
 }
 
-std::vector<GPUProfileScopeStats> D3D12GPUProfiler::GetAllStats() const
+std::vector<D3D12GPUProfileScopeStats> D3D12GPUProfiler::GetAllStats() const
 {
-	std::vector<GPUProfileScopeStats> result;
+	std::vector<D3D12GPUProfileScopeStats> result;
 	for (const Scope &scope: scopes_)
 	{
 		if (!scope.samples.empty())
@@ -231,7 +231,7 @@ void D3D12GPUProfiler::UpdateStats(Scope &scope)
 	std::vector<float> sorted = scope.samples;
 	std::sort(sorted.begin(), sorted.end());
 
-	GPUProfileScopeStats &stats = scope.stats;
+	D3D12GPUProfileScopeStats &stats = scope.stats;
 	stats.sampleCount = (uint32_t) sorted.size();
 	stats.minMs = sorted.front();
 	stats.maxMs = sorted.back();

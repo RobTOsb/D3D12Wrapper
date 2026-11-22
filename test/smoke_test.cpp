@@ -124,8 +124,8 @@ int main()
 		graphicsPipeline->BuildRootSignatureFromShader(smoke);
 		Check(graphicsPipeline->GetNativeRootSignature() != nullptr, "graphics root signature created");
 
-		GraphicsPipelineCreateInfo info;
-		info.pipelineType = PipelineType::GRAPHICS_VERTEX;
+		D3D12GraphicsPipelineCreateInfo info;
+		info.pipelineType = D3D12PipelineType::GRAPHICS_VERTEX;
 		info.rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM };
 		info.depthStencilState.depthEnable = FALSE;
 		graphicsPipeline->BuildGraphicsPipeline(info, smoke);
@@ -197,8 +197,8 @@ int main()
 			meshPipeline->BuildRootSignatureFromShader(mesh);
 			Check(meshPipeline->GetNativeRootSignature() != nullptr, "mesh root signature created");
 
-			GraphicsPipelineCreateInfo info;
-			info.pipelineType = PipelineType::GRAPHICS_MESH;
+			D3D12GraphicsPipelineCreateInfo info;
+			info.pipelineType = D3D12PipelineType::GRAPHICS_MESH;
 			info.rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM };
 			info.depthStencilState.depthEnable = FALSE;
 			meshPipeline->BuildGraphicsPipeline(info, mesh);
@@ -238,9 +238,9 @@ int main()
 		rtPipeline->BuildRootSignatureFromShader(rt);
 		Check(rtPipeline->GetNativeRootSignature() != nullptr, "raytracing root signature created");
 
-		RaytracingPipelineCreateInfo info;
+		D3D12RaytracingPipelineCreateInfo info;
 		info.exports = { L"rgen", L"miss", L"chit" };
-		RaytracingHitGroupDesc hitGroup;
+		D3D12RaytracingHitGroupDesc hitGroup;
 		hitGroup.hitGroupExport = L"hitGroup";
 		hitGroup.closestHitExport = L"chit";
 		hitGroup.type = D3D12_HIT_GROUP_TYPE_TRIANGLES;

@@ -9,7 +9,7 @@ inline constexpr uint32_t kMaxRootConstantCount = 16;
 
 inline constexpr uint32_t kStaticSamplerCount = 11;
 
-struct ReflectedRootBinding
+struct D3D12ReflectedRootBinding
 {
 	D3D12_DESCRIPTOR_RANGE_TYPE type = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	uint32_t registerSpace = 0;
@@ -25,7 +25,7 @@ inline constexpr uint32_t kNoRootConstantParameter = UINT32_MAX;
 // A named scalar/vector variable found inside a reflected cbuffer (almost always the implicit
 // $Globals DXC packs loose top-level variables into). Lets a single variable be updated by name
 // without the caller needing to know which cbuffer DXC happened to pack it into, or at what offset.
-struct ReflectedScalar
+struct D3D12ReflectedScalar
 {
 	std::string name; // HLSL variable name, from DXC reflection
 	std::string cbufferName; // the cbuffer this variable lives in, e.g. "$Globals"
@@ -34,23 +34,23 @@ struct ReflectedScalar
 	uint32_t cbufferByteSize = 0; // total size of the cbuffer named by cbufferName
 };
 
-struct ReflectedRootSignature
+struct D3D12ReflectedRootSignature
 {
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
 	Microsoft::WRL::ComPtr<ID3DBlob> serializedBlob;
-	std::vector<ReflectedRootBinding> bindings;
-	std::vector<ReflectedScalar> scalars;
+	std::vector<D3D12ReflectedRootBinding> bindings;
+	std::vector<D3D12ReflectedScalar> scalars;
 	// kNoRootConstantParameter if no g_PushConstants/pushConstants buffer was reflected at all.
 	uint32_t rootConstantParameterIndex = kNoRootConstantParameter;
 	uint32_t rootConstantCount = 0;
 };
 
 
-ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
+D3D12ReflectedRootSignature BuildRootSignatureFromReflection(ID3D12Device *device,
 														const ShaderCompilationResult &compileResult,
 														bool forRaytracing);
 
 Microsoft::WRL::ComPtr<ID3D12RootSignature> CreateRootSignatureForShader(ID3D12Device *device,
 																		 const ShaderCompilationResult &compileResult,
 																		 bool forRaytracing,
-																		 ReflectedRootSignature &outReflected);
+																		 D3D12ReflectedRootSignature &outReflected);

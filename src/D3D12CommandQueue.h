@@ -13,7 +13,7 @@ enum class D3D12QueueType : uint8_t
 	Count
 };
 
-struct SubmitSyncInfo
+struct D3D12SubmitSyncInfo
 {
 	D3D12Fence *fence;
 	uint64_t signalValue;
@@ -38,7 +38,7 @@ public:
 	void Signal(D3D12Fence *fence, uint64_t value);
 
 	void ExecuteCommandLists(D3D12CommandList **commandLists, uint32_t count);
-	void ExecuteCommandLists(D3D12CommandList **commandLists, uint32_t count, const SubmitSyncInfo &syncInfo);
+	void ExecuteCommandLists(D3D12CommandList **commandLists, uint32_t count, const D3D12SubmitSyncInfo &syncInfo);
 
 private:
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
