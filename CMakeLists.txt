@@ -10,6 +10,7 @@ include(cmake/CPM.cmake)
 include(cmake/download_slang.cmake)
 include(cmake/download_agility_sdk.cmake)
 include(cmake/download_dxc.cmake)
+include(cmake/download_pix_event_runtime.cmake)
 
 cpmaddpackage(
     NAME DirectXTex

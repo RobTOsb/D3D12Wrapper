@@ -4,6 +4,7 @@
 #include "D3D12Exception.h"
 #include "D3D12Pipeline.h"
 #include "D3D12Resource.h"
+#include <pix3.h>
 
 
 D3D12CommandList::D3D12CommandList(Microsoft::WRL::ComPtr<ID3D12Device> device,
@@ -698,11 +699,10 @@ void D3D12CommandList::ResolveQueryData(ID3D12QueryHeap *queryHeap,
 
 void D3D12CommandList::BeginEvent(const char *label)
 {
-	const std::wstring wLabel(label, label + strlen(label));
-	commandList_->BeginEvent(0, wLabel.c_str(), static_cast<UINT>((wLabel.size() + 1) * sizeof(wchar_t)));
+	PIXBeginEvent(commandList_.Get(), PIX_COLOR_DEFAULT, "%s", label);
 }
 
 void D3D12CommandList::EndEvent()
 {
-	commandList_->EndEvent();
+	PIXEndEvent(commandList_.Get());
 }

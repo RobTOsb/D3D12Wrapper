@@ -21,10 +21,12 @@ HelperClasses/RenderTargetHelper.cpp
 
 target_precompile_headers(D3D12 PRIVATE pch.h)
 
-target_link_libraries(D3D12 PUBLIC Microsoft::DirectX-Headers mimalloc-static PRIVATE d3d12 d3d11 dxgi dxguid fmtlog::fmtlog_static slang::slang D3D12MemoryAllocator imgui)
+target_link_libraries(D3D12 PUBLIC Microsoft::DirectX-Headers mimalloc-static PRIVATE d3d12 d3d11 dxgi dxguid fmtlog::fmtlog_static slang::slang D3D12MemoryAllocator imgui WinPixEventRuntime)
 target_include_directories(D3D12 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/D3D12MemoryAllocator/include imgui)
 # windows.h comes in through the public headers, so consumers need its min/max macros kept away too.
 target_compile_definitions(D3D12 PUBLIC NOMINMAX PRIVATE D3D12_AGILITY_SDK_VERSION=${AGILITY_SDK_VERSION_NUMBER})
+# PIX markers in every configuration, not only debug and profile builds.
+target_compile_definitions(D3D12 PRIVATE USE_PIX)
 
 # NVIDIA Nsight Aftermath GPU crash dumps (D3D12Aftermath.h). The SDK ships with Nsight Graphics; the newest
 # installed one is used unless AFTERMATH_SDK_DIR names another.
@@ -52,7 +54,7 @@ else()
     set(AFTERMATH_RUNTIME_DLL "" CACHE INTERNAL "")
 endif()
 
-# Copies only the runtime DLLs: Slang and DXC next to the executable, the Agility SDK in D3D12\.
+# Copies only the runtime DLLs: Slang, DXC and WinPixEventRuntime next to the executable, the Agility SDK in D3D12\.
 # Slang to DXIL needs just slang.dll and slang-compiler.dll, not the SDK's tools or other targets.
 set(SLANG_RUNTIME_DLLS
     "${SLANG_RUNTIME_DIR}/slang.dll"
@@ -65,13 +67,14 @@ function(d3d12_deploy_runtime_dlls target)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${DXC_RUNTIME_DIR}/dxcompiler.dll"
             "${DXC_RUNTIME_DIR}/dxil.dll"
+            "${PIX_EVENT_RUNTIME_DIR}/WinPixEventRuntime.dll"
             "$<TARGET_FILE_DIR:${target}>"
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/D3D12"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${AGILITY_SDK_RUNTIME_DIR}/D3D12Core.dll"
             "${AGILITY_SDK_RUNTIME_DIR}/d3d12SDKLayers.dll"
             "$<TARGET_FILE_DIR:${target}>/D3D12"
-        COMMENT "Deploying Slang, DXC and D3D12 Agility SDK runtime DLLs next to ${target}")
+        COMMENT "Deploying Slang, DXC, WinPixEventRuntime and D3D12 Agility SDK runtime DLLs next to ${target}")
     if(AFTERMATH_RUNTIME_DLL)
         add_custom_command(TARGET ${target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${AFTERMATH_RUNTIME_DLL}" "$<TARGET_FILE_DIR:${target}>"
